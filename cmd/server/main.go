@@ -1,6 +1,8 @@
 package main
 
 import (
+	"log"
+
 	"github.com/khushidesai23/Enterprise-Order-Processing/config"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/common"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/database"
@@ -9,15 +11,23 @@ import (
 
 func main() {
 
-	config.LoadConfig()
+	if err := config.Load(); err != nil {
+		log.Fatal(err)
+	}
 
-	logger.Init()
+	if err := logger.Init(); err != nil {
+		log.Fatal(err)
+	}
 
 	defer logger.Sync()
 
 	if err := database.Connect(); err != nil {
-		panic(err)
+		logger.L().Fatal(err.Error())
 	}
 
-	common.Start()
+	app := common.NewApplication()
+
+	if err := app.Start(); err != nil {
+		logger.L().Fatal(err.Error())
+	}
 }
