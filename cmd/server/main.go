@@ -1,33 +1,146 @@
 package main
 
 import (
-	"log"
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/config"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/common"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/handlers"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/middleware"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/routes"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/database"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/user"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
 func main() {
 
-	if err := config.Load(); err != nil {
-		log.Fatal(err)
+	// Load Configuration
+	cfg, err := config.Load()
+	if err != nil {
+		panic(err)
 	}
 
-	if err := logger.Init(); err != nil {
-		log.Fatal(err)
+	// Logger
+	log, err := logger.New(cfg.LogLevel)
+	if err != nil {
+		panic(err)
 	}
 
-	defer logger.Sync()
+	defer func() {
+		_ = log.Sync()
+	}()
 
-	if err := database.Connect(); err != nil {
-		logger.L().Fatal(err.Error())
+	// Gin Mode
+	switch cfg.AppEnv {
+	case "production":
+		gin.SetMode(gin.ReleaseMode)
+
+	case "test":
+		gin.SetMode(gin.TestMode)
+
+	default:
+		gin.SetMode(gin.DebugMode)
 	}
 
-	app := common.NewApplication()
-
-	if err := app.Start(); err != nil {
-		logger.L().Fatal(err.Error())
+	// Database
+	db, err := database.New(cfg)
+	if err != nil {
+		log.Fatal("database connection failed", zap.Error(err))
 	}
+
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Error("failed to close database", zap.Error(err))
+		}
+	}()
+
+	// Auto Migration
+	if err := db.AutoMigrate(); err != nil {
+		log.Fatal("database migration failed", zap.Error(err))
+	}
+
+	log.Info("database migration completed")
+
+	// Dependency Injection
+	userRepository := repository.NewUserRepository(db.DB)
+	userService := user.NewService(userRepository)
+	userHandler := user.NewHandler(userService)
+	healthHandler := handlers.NewHealthHandler(cfg, db)
+
+	// Router
+	router := gin.New()
+	
+	router.Use(gin.Recovery())
+	router.Use(middleware.RequestLogger(log))
+
+	routes.Register(
+		router,
+		healthHandler,
+		userHandler,
+	)
+
+	// HTTP Server
+	server := &http.Server{
+		Addr:              ":" + cfg.AppPort,
+		Handler:           router,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	// Start Server
+	go func() {
+
+		log.Info(
+			"starting server",
+			zap.String("application", cfg.AppName),
+			zap.String("environment", cfg.AppEnv),
+			zap.String("port", cfg.AppPort),
+		)
+
+		if err := server.ListenAndServe(); err != nil &&
+			!errors.Is(err, http.ErrServerClosed) {
+
+			log.Fatal("server crashed", zap.Error(err))
+		}
+	}()
+
+	// Graceful Shutdown
+	stop := make(chan os.Signal, 1)
+
+	signal.Notify(
+		stop,
+		os.Interrupt,
+		syscall.SIGTERM,
+	)
+
+	<-stop
+
+	log.Info("shutdown signal received")
+
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		10*time.Second,
+	)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Error("server shutdown failed", zap.Error(err))
+	}
+
+	log.Info("server stopped gracefully")
+
+	fmt.Println("Application stopped.")
 }
