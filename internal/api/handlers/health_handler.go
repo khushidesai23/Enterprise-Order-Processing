@@ -2,43 +2,84 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/khushidesai23/Enterprise-Order-Processing/config"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/response"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/database"
 )
 
-func Ping(c *gin.Context) {
+type HealthHandler struct {
+	cfg *config.Config
+	db  *database.Database
+}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "pong",
+func NewHealthHandler(
+	cfg *config.Config,
+	db *database.Database,
+) *HealthHandler {
+
+	return &HealthHandler{
+		cfg: cfg,
+		db:  db,
+	}
+}
+
+func (h *HealthHandler) Root(c *gin.Context) {
+
+	response.OK(c, "welcome", gin.H{
+		"application": h.cfg.AppName,
+		"status":      "running",
 	})
 }
 
-func Health(c *gin.Context) {
+func (h *HealthHandler) Ping(c *gin.Context) {
 
-	sqlDB, err := database.GetDB().DB()
+	response.OK(c, "pong", gin.H{
+		"timestamp": time.Now().UTC(),
+	})
+}
 
-	if err != nil {
+func (h *HealthHandler) Version(c *gin.Context) {
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status": "database unavailable",
-		})
+	response.OK(c, "version", gin.H{
+		"version": "v1.0.0",
+	})
+}
+
+func (h *HealthHandler) Ready(c *gin.Context) {
+
+	if !h.db.Healthy() {
+
+		response.Error(
+			c,
+			http.StatusServiceUnavailable,
+			"database unavailable",
+		)
 
 		return
 	}
 
-	if err := sqlDB.Ping(); err != nil {
+	response.OK(c, "ready", gin.H{
+		"database": "connected",
+	})
+}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status": "database disconnected",
-		})
+func (h *HealthHandler) Health(c *gin.Context) {
 
-		return
+	dbStatus := "down"
+
+	if h.db.Healthy() {
+		dbStatus = "up"
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"status":   "UP",
-		"database": "UP",
+	response.OK(c, "healthy", gin.H{
+		"status": "UP",
+		"database": gin.H{
+			"status": dbStatus,
+		},
+		"timestamp": time.Now().UTC(),
 	})
 }
