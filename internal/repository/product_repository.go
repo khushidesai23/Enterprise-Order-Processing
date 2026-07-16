@@ -148,7 +148,16 @@ func (r *ProductRepository) CategoryExists(categoryID uuid.UUID) (bool, error) {
 
 // Update updates an existing product.
 func (r *ProductRepository) Update(product *models.Product) error {
-	return r.db.Save(product).Error
+
+    return r.db.Model(&models.Product{}).
+        Where("id = ?", product.ID).
+        Updates(map[string]interface{}{
+            "name":         product.Name,
+            "description":  product.Description,
+            "sku":          product.SKU,
+            "price":        product.Price,
+            "category_id":  product.CategoryID,
+        }).Error
 }
 
 // Delete soft deletes a product.

@@ -91,12 +91,13 @@ func (r *InventoryRepository) ProductExists(productID uuid.UUID) (bool, error) {
 }
 
 // Update updates inventory.
-func (r *InventoryRepository) Update(inventory *models.Inventory) error {
-    return r.db.Model(inventory).
-        Select("available_quantity", "reserved_quantity").
-        Updates(models.Inventory{
-            AvailableQuantity: inventory.AvailableQuantity,
-            ReservedQuantity:  inventory.ReservedQuantity,
+func (r *InventoryRepository) Update(inv *models.Inventory) error {
+
+    return r.db.Model(&models.Inventory{}).
+        Where("product_id = ?", inv.ProductID).
+        Updates(map[string]interface{}{
+            "available_quantity": inv.AvailableQuantity,
+            "reserved_quantity":  inv.ReservedQuantity,
         }).Error
 }
 
