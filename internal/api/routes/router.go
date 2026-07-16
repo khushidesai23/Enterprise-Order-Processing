@@ -6,6 +6,7 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/handlers"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/user"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/product"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/category"
 )
 
 func Register(
@@ -13,6 +14,7 @@ func Register(
 	healthHandler *handlers.HealthHandler,
 	userHandler *user.Handler,
 	productHandler *product.Handler,
+	categoryHandler *category.Handler,
 ) {
 
 	router.GET("/", healthHandler.Root)
@@ -21,15 +23,11 @@ func Register(
 
 	{
 		api.GET("/health", healthHandler.Health)
-
 		api.GET("/ready", healthHandler.Ready)
-
 		api.GET("/ping", healthHandler.Ping)
-
 		api.GET("/version", healthHandler.Version)
-
 		user.RegisterRoutes(api, userHandler)
-
 		product.RegisterRoutes(api, productHandler)
+		category.RegisterRoutes(api, categoryHandler)
 	}
 }
