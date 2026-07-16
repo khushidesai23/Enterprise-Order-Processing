@@ -4,8 +4,8 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/handlers"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/user"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/product"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/user"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/product"
 )
 
 func Register(

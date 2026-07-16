@@ -19,8 +19,8 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/routes"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/database"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/user"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/product"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/user"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/product"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
