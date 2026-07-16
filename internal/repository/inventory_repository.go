@@ -92,7 +92,12 @@ func (r *InventoryRepository) ProductExists(productID uuid.UUID) (bool, error) {
 
 // Update updates inventory.
 func (r *InventoryRepository) Update(inventory *models.Inventory) error {
-	return r.db.Save(inventory).Error
+    return r.db.Model(inventory).
+        Select("available_quantity", "reserved_quantity").
+        Updates(models.Inventory{
+            AvailableQuantity: inventory.AvailableQuantity,
+            ReservedQuantity:  inventory.ReservedQuantity,
+        }).Error
 }
 
 // Delete deletes inventory.
