@@ -89,6 +89,10 @@ func main() {
 	categoryService := category.NewService(categoryRepository)
 	categoryHandler := category.NewHandler(categoryService)
 
+	inventoryRepository := repository.NewInventoryRepository(db.DB)
+	inventoryService := inventory.NewService(inventoryRepository)
+	inventoryHandler := inventory.NewHandler(inventoryService)
+
 	// Router
 	router := gin.New()
 	
@@ -101,6 +105,7 @@ func main() {
 		userHandler,
 		productHandler,
 		categoryHandler,
+		inventoryHandler,
 	)
 
 	// HTTP Server
