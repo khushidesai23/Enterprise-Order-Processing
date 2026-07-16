@@ -20,6 +20,7 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/database"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/user"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/product"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
@@ -73,10 +74,16 @@ func main() {
 	log.Info("database migration completed")
 
 	// Dependency Injection
+	healthHandler := handlers.NewHealthHandler(cfg, db)
+	
 	userRepository := repository.NewUserRepository(db.DB)
 	userService := user.NewService(userRepository)
 	userHandler := user.NewHandler(userService)
-	healthHandler := handlers.NewHealthHandler(cfg, db)
+
+	productRepository := repository.NewProductRepository(db.DB)
+	productService := product.NewService(productRepository)
+	productHandler := product.NewHandler(productService)
+
 
 	// Router
 	router := gin.New()
@@ -88,6 +95,7 @@ func main() {
 		router,
 		healthHandler,
 		userHandler,
+		productHandler,
 	)
 
 	// HTTP Server
