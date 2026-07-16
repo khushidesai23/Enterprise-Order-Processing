@@ -22,6 +22,7 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/user"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/product"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/category"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/inventory"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
@@ -90,7 +91,7 @@ func main() {
 	categoryHandler := category.NewHandler(categoryService)
 
 	inventoryRepository := repository.NewInventoryRepository(db.DB)
-	inventoryService := inventory.NewService(inventoryRepository)
+	inventoryService := inventory.NewService(inventoryRepository, productRepository)
 	inventoryHandler := inventory.NewHandler(inventoryService)
 
 	// Router
