@@ -23,6 +23,7 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/product"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/category"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/inventory"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/order"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
@@ -94,6 +95,11 @@ func main() {
 	inventoryService := inventory.NewService(inventoryRepository, productRepository)
 	inventoryHandler := inventory.NewHandler(inventoryService)
 
+	orderRepository := repository.NewOrderRepository(db.DB)
+	orderItemRepository := repository.NewOrderItemRepository(db.DB)
+	orderService := order.NewService(orderRepository, orderItemRepository, userRepository, productRepository, inventoryRepository)
+	orderHandler := order.NewHandler(orderService)
+
 	// Router
 	router := gin.New()
 	
@@ -107,6 +113,7 @@ func main() {
 		productHandler,
 		categoryHandler,
 		inventoryHandler,
+		orderHandler,
 	)
 
 	// HTTP Server
