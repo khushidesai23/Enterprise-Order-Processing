@@ -327,10 +327,74 @@ func (s *Service) UpdateOrderStatus(
 		return nil, err
 	}
 
-	if err := s.orderRepository.UpdateStatus(
-		order.ID,
-		req.Status,
-	); err != nil {
+	tx := s.orderRepository.Begin()
+
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
+		}
+	}()
+
+	//--------------------------------------------------
+	// Confirm Reserved Inventory on Shipment
+	//--------------------------------------------------
+
+	if req.Status == models.OrderShipped {
+
+		for _, item := range order.Items {
+
+			inventory, err := s.inventoryRepository.GetByProductIDTx(
+				tx,
+				item.ProductID,
+			)
+			if err != nil {
+
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					tx.Rollback()
+					return nil, ErrInventoryNotFound
+				}
+
+				tx.Rollback()
+				return nil, err
+			}
+
+			if inventory.ReservedQuantity < item.Quantity {
+				tx.Rollback()
+				return nil, ErrInsufficientReserved
+			}
+
+			if err := s.inventoryRepository.ConfirmReservedStockTx(
+				tx,
+				item.ProductID,
+				item.Quantity,
+			); err != nil {
+				tx.Rollback()
+				return nil, err
+			}
+		}
+	}
+
+	//--------------------------------------------------
+	// Update Order Status
+	//--------------------------------------------------
+
+	if err := tx.
+		Model(&models.Order{}).
+		Where("id = ?", order.ID).
+		Update("status", req.Status).
+		Error; err != nil {
+
+		tx.Rollback()
+		return nil, err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
 		return nil, err
 	}
 
