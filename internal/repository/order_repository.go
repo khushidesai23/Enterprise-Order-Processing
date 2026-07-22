@@ -126,6 +126,20 @@ func (r *OrderRepository) UpdateTotalAmount(
 		Error
 }
 
+// UpdateStatusTx
+func (r *OrderRepository) UpdateStatusTx(
+	tx *gorm.DB,
+	id uuid.UUID,
+	status models.OrderStatus,
+) error {
+
+	return tx.
+		Model(&models.Order{}).
+		Where("id = ?", id).
+		Update("status", status).
+		Error
+}
+
 //
 // Delete
 //
