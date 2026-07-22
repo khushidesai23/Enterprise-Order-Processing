@@ -105,3 +105,10 @@ type PaymentSummary struct {
 
 	Revenue float64 `json:"revenue"`
 }
+
+// Process Webhook Request
+type ProcessWebhookRequest struct {
+	Body []byte
+
+	Signature string
+}
