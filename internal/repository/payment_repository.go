@@ -19,18 +19,12 @@ func NewPaymentRepository(db *gorm.DB) *PaymentRepository {
 	}
 }
 
-//
 // Transaction Support
-//
-
 func (r *PaymentRepository) Begin() *gorm.DB {
 	return r.db.Begin()
 }
 
-//
 // Create
-//
-
 func (r *PaymentRepository) Create(
 	tx *gorm.DB,
 	payment *models.Payment,
@@ -38,10 +32,7 @@ func (r *PaymentRepository) Create(
 	return tx.Create(payment).Error
 }
 
-//
 // Read
-//
-
 func (r *PaymentRepository) GetByID(
 	id uuid.UUID,
 ) (*models.Payment, error) {
@@ -149,10 +140,7 @@ func (r *PaymentRepository) GetAll() ([]models.Payment, error) {
 	return payments, nil
 }
 
-//
 // Update
-//
-
 func (r *PaymentRepository) UpdateStatus(
 	tx *gorm.DB,
 	id uuid.UUID,
@@ -192,10 +180,25 @@ func (r *PaymentRepository) UpdateGatewayOrder(
 		Error
 }
 
-//
-// Delete
-//
+// Complete Payment
+func (r *PaymentRepository) CompletePayment(
+	tx *gorm.DB,
+	id uuid.UUID,
+	transactionID string,
+	status models.PaymentStatus,
+) error {
 
+	return tx.
+		Model(&models.Payment{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"transaction_id": transactionID,
+			"status":         status,
+		}).
+		Error
+}
+
+// Delete
 func (r *PaymentRepository) Delete(
 	id uuid.UUID,
 ) error {
