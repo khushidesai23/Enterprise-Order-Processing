@@ -175,7 +175,8 @@ func (s *Service) CreateOrder(
 		// Reserve Inventory
 		// -----------------------------
 
-		if err := s.inventoryRepository.ReserveStock(
+		if err := s.inventoryRepository.ReserveStockTx(
+			tx,
 			requestItem.ProductID,
 			requestItem.Quantity,
 		); err != nil {
@@ -536,7 +537,8 @@ func (s *Service) CancelOrder(
 			return nil, ErrInsufficientReserved
 		}
 
-		if err := s.inventoryRepository.ReleaseReservedStock(
+		if err := s.inventoryRepository.ReleaseReservedStockTx(
+			tx,
 			item.ProductID,
 			item.Quantity,
 		); err != nil {
