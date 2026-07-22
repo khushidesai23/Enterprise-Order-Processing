@@ -12,9 +12,9 @@ import (
 )
 
 type Config struct {
-	AppName    string
-	AppEnv     string
-	AppPort    string
+	AppName string
+	AppEnv  string
+	AppPort string
 
 	DBHost     string
 	DBPort     string
@@ -22,6 +22,10 @@ type Config struct {
 	DBPassword string
 	DBName     string
 	DBSSLMode  string
+
+	RazorpayKeyID         string
+	RazorpayKeySecret     string
+	RazorpayWebhookSecret string
 
 	LogLevel string
 }
@@ -36,9 +40,9 @@ func Load() (*Config, error) {
 	viper.AutomaticEnv()
 
 	cfg := &Config{
-		AppName:    viper.GetString("APP_NAME"),
-		AppEnv:     viper.GetString("APP_ENV"),
-		AppPort:    viper.GetString("APP_PORT"),
+		AppName: viper.GetString("APP_NAME"),
+		AppEnv:  viper.GetString("APP_ENV"),
+		AppPort: viper.GetString("APP_PORT"),
 
 		DBHost:     viper.GetString("DB_HOST"),
 		DBPort:     viper.GetString("DB_PORT"),
@@ -46,6 +50,10 @@ func Load() (*Config, error) {
 		DBPassword: viper.GetString("DB_PASSWORD"),
 		DBName:     viper.GetString("DB_NAME"),
 		DBSSLMode:  viper.GetString("DB_SSLMODE"),
+
+		RazorpayKeyID:         viper.GetString("RAZORPAY_KEY_ID"),
+		RazorpayKeySecret:     viper.GetString("RAZORPAY_KEY_SECRET"),
+		RazorpayWebhookSecret: viper.GetString("RAZORPAY_WEBHOOK_SECRET"),
 
 		LogLevel: viper.GetString("LOG_LEVEL"),
 	}
@@ -68,6 +76,10 @@ func setDefaults() {
 	viper.SetDefault("DB_PASSWORD", "postgres")
 	viper.SetDefault("DB_NAME", "order_processing")
 	viper.SetDefault("DB_SSLMODE", "disable")
+
+	viper.SetDefault("RAZORPAY_KEY_ID", "")
+	viper.SetDefault("RAZORPAY_KEY_SECRET", "")
+	viper.SetDefault("RAZORPAY_WEBHOOK_SECRET", "")
 
 	viper.SetDefault("LOG_LEVEL", "debug")
 }
@@ -96,6 +108,15 @@ func (c *Config) Validate() error {
 	}
 	if strings.TrimSpace(c.DBSSLMode) == "" {
 		return errors.New("DB_SSLMODE is required")
+	}
+	if strings.TrimSpace(c.RazorpayKeyID) == "" {
+		return errors.New("RAZORPAY_KEY_ID is required")
+	}
+	if strings.TrimSpace(c.RazorpayKeySecret) == "" {
+		return errors.New("RAZORPAY_KEY_SECRET is required")
+	}
+	if strings.TrimSpace(c.RazorpayWebhookSecret) == "" {
+		return errors.New("RAZORPAY_WEBHOOK_SECRET is required")
 	}
 	if strings.TrimSpace(c.LogLevel) == "" {
 		return errors.New("LOG_LEVEL is required")
