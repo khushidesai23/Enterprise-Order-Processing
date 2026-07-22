@@ -14,11 +14,20 @@ const (
 type Payment struct {
 	BaseModel
 
+	// Internal Order
 	OrderID uuid.UUID `gorm:"uniqueIndex;not null"`
+
+	// Razorpay Order ID
+	GatewayOrderID string `gorm:"size:255;uniqueIndex"`
+
+	// Razorpay Payment ID
+	TransactionID string `gorm:"size:255;uniqueIndex"`
 
 	Status PaymentStatus `gorm:"size:30;not null"`
 
 	Amount float64 `gorm:"type:numeric(12,2);not null"`
 
-	TransactionID string `gorm:"size:255"`
+	Currency string `gorm:"size:10;default:'INR'"`
+
+	Gateway string `gorm:"size:30;default:'RAZORPAY'"`
 }
