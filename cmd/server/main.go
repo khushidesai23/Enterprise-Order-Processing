@@ -18,12 +18,13 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/middleware"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/routes"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/database"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/user"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/product"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/category"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/inventory"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/order"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/payment"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/product"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/user"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
@@ -78,7 +79,7 @@ func main() {
 
 	// Dependency Injection
 	healthHandler := handlers.NewHealthHandler(cfg, db)
-	
+
 	userRepository := repository.NewUserRepository(db.DB)
 	userService := user.NewService(userRepository)
 	userHandler := user.NewHandler(userService)
@@ -100,9 +101,28 @@ func main() {
 	orderService := order.NewService(orderRepository, orderItemRepository, userRepository, productRepository, inventoryRepository)
 	orderHandler := order.NewHandler(orderService)
 
+	paymentRepository := repository.NewPaymentRepository(db.DB)
+	paymentWebhookRepository := repository.NewPaymentWebhookRepository(db.DB)
+
+	gateway := payment.NewRazorpayGateway(
+		cfg.RazorpayKeyID,
+		cfg.RazorpayKeySecret,
+		cfg.RazorpayWebhookSecret,
+	)
+
+	paymentService := payment.NewService(
+		paymentRepository,
+		paymentWebhookRepository,
+		orderRepository,
+		inventoryRepository,
+		gateway,
+		cfg.RazorpayKeyID,
+	)
+	paymentHandler := payment.NewHandler(paymentService)
+
 	// Router
 	router := gin.New()
-	
+
 	router.Use(gin.Recovery())
 	router.Use(middleware.RequestLogger(log))
 
@@ -114,6 +134,7 @@ func main() {
 		categoryHandler,
 		inventoryHandler,
 		orderHandler,
+		paymentHandler,
 	)
 
 	// HTTP Server

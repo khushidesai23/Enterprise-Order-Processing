@@ -9,6 +9,8 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/category"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/inventory"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/order"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/payment"
+
 )
 
 func Register(
@@ -19,6 +21,7 @@ func Register(
 	categoryHandler *category.Handler,
 	inventoryHandler *inventory.Handler,
 	orderHandler *order.Handler,
+	paymentHandler *payment.Handler,
 ) {
 
 	router.GET("/", healthHandler.Root)
@@ -35,5 +38,6 @@ func Register(
 		category.RegisterRoutes(api, categoryHandler)
 		inventory.RegisterRoutes(api, inventoryHandler)
 		order.RegisterRoutes(api, orderHandler)
+		payment.RegisterRoutes(api, paymentHandler)
 	}
 }
