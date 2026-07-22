@@ -2,7 +2,6 @@ package payment
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/razorpay/razorpay-go"
@@ -72,9 +71,11 @@ func (g *RazorpayGateway) CreateOrder(
 	}, nil
 }
 
-func (g *RazorpayGateway) VerifySignature(
+func (g *RazorpayGateway) VerifyCheckoutSignature(
 	ctx context.Context,
-	req GatewayVerificationRequest,
+	orderID string,
+	paymentID string,
+	signature string,
 ) error {
 
 	verifier := NewSignatureVerifier(
@@ -83,42 +84,25 @@ func (g *RazorpayGateway) VerifySignature(
 	)
 
 	return verifier.VerifyCheckoutSignature(
-		req.OrderID,
-		req.PaymentID,
-		req.Signature,
+		orderID,
+		paymentID,
+		signature,
 	)
 }
 
-func (g *RazorpayGateway) ParseWebhook(
+func (g *RazorpayGateway) VerifyWebhookSignature(
 	ctx context.Context,
 	body []byte,
 	signature string,
-) (*GatewayCallback, error) {
+) error {
 
-	var payload struct {
-		Event string `json:"event"`
+	verifier := NewSignatureVerifier(
+		g.keySecret,
+		g.webhookSecret,
+	)
 
-		Payload struct {
-			Payment struct {
-				Entity struct {
-					OrderID string `json:"order_id"`
-
-					ID string `json:"id"`
-
-					Status string `json:"status"`
-				} `json:"entity"`
-			} `json:"payment"`
-		} `json:"payload"`
-	}
-
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, err
-	}
-
-	return &GatewayCallback{
-		OrderID:       payload.Payload.Payment.Entity.OrderID,
-		PaymentID:     payload.Payload.Payment.Entity.ID,
-		PaymentStatus: payload.Payload.Payment.Entity.Status,
-		Signature:     signature,
-	}, nil
+	return verifier.VerifyWebhookSignature(
+		body,
+		signature,
+	)
 }
