@@ -25,14 +25,6 @@ type GatewayVerificationRequest struct {
 	Signature  string
 }
 
-// Gateway Callback
-type GatewayCallback struct {
-	OrderID       string
-	PaymentID     string
-	PaymentStatus string
-	Signature     string
-}
-
 // Payment Gateway Interface
 type PaymentGateway interface {
 
@@ -41,8 +33,16 @@ type PaymentGateway interface {
 		req GatewayOrderRequest,
 	) (*GatewayOrderResponse, error)
 
-	VerifySignature(
+	VerifyCheckoutSignature(
 		ctx context.Context,
-		req GatewayVerificationRequest,
+		orderID string,
+		paymentID string,
+		signature string,
+	) error
+
+	VerifyWebhookSignature(
+		ctx context.Context,
+		body []byte,
+		signature string,
 	) error
 }
