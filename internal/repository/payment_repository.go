@@ -55,6 +55,29 @@ func (r *PaymentRepository) GetByID(
 	return &payment, nil
 }
 
+func (r *PaymentRepository) GetByIDTx(
+	tx *gorm.DB,
+	id uuid.UUID,
+) (*models.Payment, error) {
+
+	var payment models.Payment
+
+	err := tx.
+		First(&payment, "id = ?", id).
+		Error
+
+	if err != nil {
+
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+
+		return nil, err
+	}
+
+	return &payment, nil
+}
+
 func (r *PaymentRepository) GetByOrderID(
 	orderID uuid.UUID,
 ) (*models.Payment, error) {
@@ -78,6 +101,30 @@ func (r *PaymentRepository) GetByOrderID(
 	return &payment, nil
 }
 
+func (r *PaymentRepository) GetByOrderIDTx(
+	tx *gorm.DB,
+	orderID uuid.UUID,
+) (*models.Payment, error) {
+
+	var payment models.Payment
+
+	err := tx.
+		Where("order_id = ?", orderID).
+		First(&payment).
+		Error
+
+	if err != nil {
+
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+
+		return nil, err
+	}
+
+	return &payment, nil
+}
+
 func (r *PaymentRepository) GetByGatewayOrderID(
 	gatewayOrderID string,
 ) (*models.Payment, error) {
@@ -85,6 +132,30 @@ func (r *PaymentRepository) GetByGatewayOrderID(
 	var payment models.Payment
 
 	err := r.db.
+		Where("gateway_order_id = ?", gatewayOrderID).
+		First(&payment).
+		Error
+
+	if err != nil {
+
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+
+		return nil, err
+	}
+
+	return &payment, nil
+}
+
+func (r *PaymentRepository) GetByGatewayOrderIDTx(
+	tx *gorm.DB,
+	gatewayOrderID string,
+) (*models.Payment, error) {
+
+	var payment models.Payment
+
+	err := tx.
 		Where("gateway_order_id = ?", gatewayOrderID).
 		First(&payment).
 		Error
