@@ -58,6 +58,32 @@ func (r *OrderRepository) GetByID(id uuid.UUID) (*models.Order, error) {
 	return &order, nil
 }
 
+func (r *OrderRepository) GetByIDTx(
+	tx *gorm.DB,
+	id uuid.UUID,
+) (*models.Order, error) {
+
+	var order models.Order
+
+	err := tx.
+		Preload("User").
+		Preload("Items").
+		Preload("Items.Product").
+		Preload("Payment").
+		First(&order, "id = ?", id).
+		Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+
+		return nil, err
+	}
+
+	return &order, nil
+}
+
 func (r *OrderRepository) GetAll() ([]models.Order, error) {
 
 	var orders []models.Order
