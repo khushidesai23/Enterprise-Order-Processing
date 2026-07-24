@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
+	"gorm.io/gorm"
 )
 
 type UserRepository interface {
@@ -14,6 +14,7 @@ type UserRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 
 	GetByID(ctx context.Context, id uuid.UUID) (*models.User, error)
+	GetByIDTx(ctx context.Context, tx *gorm.DB, id uuid.UUID) (*models.User, error)
 	GetByEmail(ctx context.Context, email string) (*models.User, error)
 	List(ctx context.Context) ([]models.User, error)
 }
@@ -59,6 +60,28 @@ func (r *userRepository) GetByID(
 	var user models.User
 
 	err := r.db.WithContext(ctx).
+		First(&user, "id = ?", id).
+		Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+func (r *userRepository) GetByIDTx(
+	ctx context.Context,
+	tx *gorm.DB,
+	id uuid.UUID,
+) (*models.User, error) {
+
+	var user models.User
+
+	err := tx.WithContext(ctx).
 		First(&user, "id = ?", id).
 		Error
 
