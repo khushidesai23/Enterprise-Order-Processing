@@ -1,122 +1,97 @@
 package payment
 
 import (
-	"strings"
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
+	ordermodule "github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/order"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 )
 
-// package-level errors
-var (
-	ErrInsufficientReserved = errors.New("insufficient reserved stock")
-)
-
 type Service struct {
-
 	paymentRepository *repository.PaymentRepository
-
 	webhookRepository *repository.PaymentWebhookRepository
-
-	orderRepository *repository.OrderRepository
-
-	inventoryRepository *repository.InventoryRepository
-
-	gateway PaymentGateway
-
-	keyID string
+	orderService      *ordermodule.Service
+	gateway           PaymentGateway
+	keyID             string
 }
 
 func NewService(
 	paymentRepository *repository.PaymentRepository,
 	webhookRepository *repository.PaymentWebhookRepository,
-	orderRepository *repository.OrderRepository,
-	inventoryRepository *repository.InventoryRepository,
+	orderService *ordermodule.Service,
 	gateway PaymentGateway,
 	keyID string,
 ) *Service {
 
 	return &Service{
-		paymentRepository:   paymentRepository,
-		webhookRepository:   webhookRepository,
-		orderRepository:     orderRepository,
-		inventoryRepository: inventoryRepository,
-		gateway:             gateway,
-		keyID:               keyID,
+		paymentRepository: paymentRepository,
+		webhookRepository: webhookRepository,
+		orderService:      orderService,
+		gateway:           gateway,
+		keyID:             keyID,
 	}
 }
 
-// CreatePayment creates a payment and generates a Razorpay Order.
+// CreatePayment creates a payment and generates a Razorpay order.
 func (s *Service) CreatePayment(
 	ctx context.Context,
 	req CreatePaymentRequest,
 ) (*CheckoutResponse, error) {
 
-	orderModel, err := s.orderRepository.GetByID(req.OrderID)
+	tx := s.paymentRepository.Begin()
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+
+	defer rollbackOnPanic(tx)
+
+	orderModel, err := s.orderService.GetOrderForPaymentTx(tx, req.OrderID)
 	if err != nil {
+		tx.Rollback()
+		return nil, mapOrderError(err)
+	}
 
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrOrderNotFound
-		}
-
+	if err := s.validateOrderForPayment(orderModel.Status); err != nil {
+		tx.Rollback()
 		return nil, err
 	}
 
-	switch orderModel.Status {
-
-	case models.OrderPaid:
-		return nil, ErrOrderAlreadyPaid
-
-	case models.OrderCancelled:
-		return nil, ErrOrderCancelled
-	}
-
-	existingPayment, err := s.paymentRepository.GetByOrderID(
-		req.OrderID,
-	)
-
+	existingPayment, err := s.paymentRepository.GetByOrderIDTx(tx, req.OrderID)
 	if err == nil && existingPayment != nil {
+		tx.Rollback()
 
 		if existingPayment.Status == models.PaymentPending {
-
-			response := ToCheckoutResponse(
-				existingPayment,
-				s.keyID,
-			)
-
+			response := ToCheckoutResponse(existingPayment, s.keyID)
 			return &response, nil
 		}
 
 		if existingPayment.Status == models.PaymentSuccess {
 			return nil, ErrPaymentAlreadyCompleted
 		}
-	}
 
-	tx := s.paymentRepository.Begin()
-
-	if tx.Error != nil {
-		return nil, tx.Error
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-			panic(r)
+		if existingPayment.Status == models.PaymentFailed {
+			return nil, ErrPaymentAlreadyFailed
 		}
-	}()
 
-	payment := ToPaymentModel(
-		req,
-		orderModel.TotalAmount,
-	)
+		if existingPayment.Status == models.PaymentRefunded {
+			return nil, ErrInvalidPaymentStatus
+		}
+	}
 
-	// Create Razorpay Order
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		tx.Rollback()
+		return nil, err
+	}
+
+	payment := ToPaymentModel(req, orderModel.TotalAmount)
+
 	gatewayOrder, err := s.gateway.CreateOrder(
 		ctx,
 		GatewayOrderRequest{
@@ -132,38 +107,22 @@ func (s *Service) CreatePayment(
 
 	payment.GatewayOrderID = gatewayOrder.OrderID
 
-	// Save Payment
-	if err := s.paymentRepository.Create(
-		tx,
-		payment,
-	); err != nil {
-
+	if err := s.paymentRepository.Create(tx, payment); err != nil {
 		tx.Rollback()
 		return nil, err
 	}
 
-	// Update Order Status
-	if err := s.orderRepository.UpdateStatusTx(
-		tx,
-		orderModel.ID,
-		models.OrderPaymentPending,
-	); err != nil {
-
+	if err := s.orderService.MarkOrderPaymentPending(tx, orderModel.ID); err != nil {
 		tx.Rollback()
-		return nil, err
+		return nil, mapOrderError(err)
 	}
 
-	// Commit
 	if err := tx.Commit().Error; err != nil {
 		tx.Rollback()
 		return nil, err
 	}
 
-	response := ToCheckoutResponse(
-		payment,
-		s.keyID,
-	)
-
+	response := ToCheckoutResponse(payment, s.keyID)
 	return &response, nil
 }
 
@@ -203,15 +162,8 @@ func (s *Service) GetPaymentByOrder(
 	orderID uuid.UUID,
 ) (*PaymentResponse, error) {
 
-	// Validate order exists
-	_, err := s.orderRepository.GetByID(orderID)
-	if err != nil {
-
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrOrderNotFound
-		}
-
-		return nil, err
+	if _, err := s.orderService.GetOrderForPayment(orderID); err != nil {
+		return nil, mapOrderError(err)
 	}
 
 	payment, err := s.paymentRepository.GetByOrderID(orderID)
@@ -242,53 +194,32 @@ func (s *Service) GetPaymentSummary() (*PaymentSummary, error) {
 	return &summary, nil
 }
 
-// ProcessWebhook processes Razorpay webhook events.
+// ProcessWebhook verifies, persists, and processes Razorpay webhook events.
 func (s *Service) ProcessWebhook(
 	ctx context.Context,
 	req ProcessWebhookRequest,
 ) error {
 
-	//--------------------------------------------------
-	// Verify Razorpay Signature
-	//--------------------------------------------------
-
-	if err := s.gateway.VerifyWebhookSignature(
-		ctx,
-		req.Body,
-		req.Signature,
-	); err != nil {
+	if err := s.gateway.VerifyWebhookSignature(ctx, req.Body, req.Signature); err != nil {
 		return err
 	}
-
-	//--------------------------------------------------
-	// Parse Webhook
-	//--------------------------------------------------
 
 	webhook, err := ParseWebhook(req.Body)
 	if err != nil {
 		return err
 	}
 
-	//--------------------------------------------------
-	// Begin Transaction
-	//--------------------------------------------------
+	status, err := webhook.PaymentStatus()
+	if err != nil {
+		return err
+	}
 
 	tx := s.paymentRepository.Begin()
-
 	if tx.Error != nil {
 		return tx.Error
 	}
 
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-			panic(r)
-		}
-	}()
-
-	//--------------------------------------------------
-	// Persist Webhook
-	//--------------------------------------------------
+	defer rollbackOnPanic(tx)
 
 	webhookRecord := &models.PaymentWebhook{
 		Gateway:        "RAZORPAY",
@@ -301,52 +232,18 @@ func (s *Service) ProcessWebhook(
 		RawPayload:     req.Body,
 	}
 
-	if err := s.webhookRepository.Create(
-		tx,
-		webhookRecord,
-	); err != nil {
+	if err := s.webhookRepository.Create(tx, webhookRecord); err != nil {
+		tx.Rollback()
 
-		// Duplicate webhook
-		// payload_id has UNIQUE INDEX
-		// Returning nil makes webhook
-		// processing idempotent.
-
-		if strings.Contains(
-			err.Error(),
-			"duplicate key",
-		) {
-
-			tx.Rollback()
-
+		if isDuplicateKey(err) {
 			return nil
 		}
 
-		tx.Rollback()
-
 		return err
 	}
 
-	//--------------------------------------------------
-	// Convert Razorpay Event
-	//--------------------------------------------------
-
-	status, err := webhook.PaymentStatus()
+	payment, err := s.paymentRepository.GetByGatewayOrderIDTx(tx, webhook.GatewayOrderID())
 	if err != nil {
-
-		tx.Rollback()
-
-		return err
-	}
-
-	//--------------------------------------------------
-	// Find Payment
-	//--------------------------------------------------
-
-	payment, err := s.paymentRepository.GetByGatewayOrderID(
-		webhook.GatewayOrderID(),
-	)
-	if err != nil {
-
 		tx.Rollback()
 
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -356,221 +253,40 @@ func (s *Service) ProcessWebhook(
 		return err
 	}
 
-		//--------------------------------------------------
-	// Handle Business Event
-	//--------------------------------------------------
-
-	switch status {
-
-	case models.PaymentPending:
-
-		// Nothing to do.
-		// Payment is authorized but not yet captured.
-
-	case models.PaymentSuccess:
-
-		//----------------------------------------------
-		// Idempotency
-		//----------------------------------------------
-
-		if payment.Status == models.PaymentSuccess {
-
-			processedAt := time.Now().Unix()
-
-			if err := s.webhookRepository.MarkProcessed(
-				tx,
-				webhook.PayloadID(),
-				processedAt,
-			); err != nil {
-
-				tx.Rollback()
-				return err
-			}
-
-			if err := tx.Commit().Error; err != nil {
-				tx.Rollback()
-				return err
-			}
-
-			return nil
-		}
-
-		if err := s.paymentRepository.CompletePayment(
-			tx,
-			payment.ID,
-			webhook.TransactionID(),
-			models.PaymentSuccess,
-		); err != nil {
-
-			tx.Rollback()
-			return err
-		}
-
-		if err := s.orderRepository.UpdateStatusTx(
-			tx,
-			payment.OrderID,
-			models.OrderPaid,
-		); err != nil {
-
-			tx.Rollback()
-			return err
-		}
-
-	case models.PaymentFailed:
-
-		//----------------------------------------------
-		// Idempotency
-		//----------------------------------------------
-
-		if payment.Status == models.PaymentFailed {
-
-			processedAt := time.Now().Unix()
-
-			if err := s.webhookRepository.MarkProcessed(
-				tx,
-				webhook.PayloadID(),
-				processedAt,
-			); err != nil {
-
-				tx.Rollback()
-				return err
-			}
-
-			if err := tx.Commit().Error; err != nil {
-				tx.Rollback()
-				return err
-			}
-
-			return nil
-		}
-
-		if err := s.paymentRepository.CompletePayment(
-			tx,
-			payment.ID,
-			webhook.TransactionID(),
-			models.PaymentFailed,
-		); err != nil {
-
-			tx.Rollback()
-			return err
-		}
-
-		orderModel, err := s.orderRepository.GetByID(
-			payment.OrderID,
-		)
-		if err != nil {
-			tx.Rollback()
-			return err
-		}
-
-		for _, item := range orderModel.Items {
-
-			inventory, err := s.inventoryRepository.GetByProductIDTx(
-				tx,
-				item.ProductID,
-			)
-			if err != nil {
-				tx.Rollback()
-				return err
-			}
-
-			if inventory.ReservedQuantity < item.Quantity {
-				tx.Rollback()
-
-				_ = s.webhookRepository.MarkFailed(
-					tx,
-					webhook.PayloadID(),
-					time.Now().Unix(),
-				)
-
-				return ErrInsufficientReserved
-			}
-
-			if err := s.inventoryRepository.ReleaseReservedStockTx(
-				tx,
-				item.ProductID,
-				item.Quantity,
-			); err != nil {
-
-				tx.Rollback()
-
-				_ = s.webhookRepository.MarkFailed(
-					tx,
-					webhook.PayloadID(),
-					time.Now().Unix(),
-				)
-
-				return err
-			}
-		}
-
-		if err := s.orderRepository.UpdateStatusTx(
-			tx,
-			payment.OrderID,
-			models.OrderCancelled,
-		); err != nil {
-
-			tx.Rollback()
-
-			_ = s.webhookRepository.MarkFailed(
-				tx,
-				webhook.PayloadID(),
-				time.Now().Unix(),
-			)
-
-			return err
-		}
-
-	case models.PaymentRefunded:
-
-		// Future implementation
-
-	default:
-
+	if err := s.applyWebhookPaymentStatus(tx, payment, webhook.TransactionID(), status); err != nil {
+		_ = s.webhookRepository.MarkFailed(tx, webhook.PayloadID(), time.Now().Unix())
 		tx.Rollback()
-
-		return ErrUnknownWebhookEvent
-	}
-
-	//--------------------------------------------------
-	// Mark Webhook Processed
-	//--------------------------------------------------
-
-	processedAt := time.Now().Unix()
-
-	if err := s.webhookRepository.MarkProcessed(
-		tx,
-		webhook.PayloadID(),
-		processedAt,
-	); err != nil {
-
-		tx.Rollback()
-
 		return err
 	}
 
-	//--------------------------------------------------
-	// Commit
-	//--------------------------------------------------
+	if err := s.webhookRepository.MarkProcessed(tx, webhook.PayloadID(), time.Now().Unix()); err != nil {
+		tx.Rollback()
+		return err
+	}
 
 	if err := tx.Commit().Error; err != nil {
-
 		tx.Rollback()
-
 		return err
 	}
 
 	return nil
 }
 
-// RefundPayment updates a successful payment as refunded.
-// Gateway refund integration will be added later.
+// RefundPayment updates a successful payment as refunded and delegates order behavior.
 func (s *Service) RefundPayment(
 	id uuid.UUID,
 ) (*PaymentResponse, error) {
 
-	payment, err := s.paymentRepository.GetByID(id)
+	tx := s.paymentRepository.Begin()
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+
+	defer rollbackOnPanic(tx)
+
+	payment, err := s.paymentRepository.GetByIDTx(tx, id)
 	if err != nil {
+		tx.Rollback()
 
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrPaymentNotFound
@@ -580,34 +296,23 @@ func (s *Service) RefundPayment(
 	}
 
 	if payment.Status == models.PaymentRefunded {
+		tx.Rollback()
 		return nil, ErrInvalidPaymentStatus
 	}
 
 	if payment.Status != models.PaymentSuccess {
+		tx.Rollback()
 		return nil, ErrPaymentNotPending
 	}
 
-	tx := s.paymentRepository.Begin()
-
-	if tx.Error != nil {
-		return nil, tx.Error
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-			panic(r)
-		}
-	}()
-
-	if err := s.paymentRepository.UpdateStatus(
-		tx,
-		payment.ID,
-		models.PaymentRefunded,
-	); err != nil {
-
+	if err := s.paymentRepository.UpdateStatus(tx, payment.ID, models.PaymentRefunded); err != nil {
 		tx.Rollback()
 		return nil, err
+	}
+
+	if err := s.orderService.RefundOrder(tx, payment.OrderID); err != nil {
+		tx.Rollback()
+		return nil, mapOrderError(err)
 	}
 
 	if err := tx.Commit().Error; err != nil {
@@ -621,38 +326,102 @@ func (s *Service) RefundPayment(
 	}
 
 	response := ToPaymentResponse(payment)
-
 	return &response, nil
 }
 
-//
-// Helpers
-//
-
-func (s *Service) isPaymentCompleted(
+func (s *Service) applyWebhookPaymentStatus(
+	tx *gorm.DB,
+	payment *models.Payment,
+	transactionID string,
 	status models.PaymentStatus,
-) bool {
+) error {
 
-	return status == models.PaymentSuccess
+	switch status {
+	case models.PaymentPending:
+		return nil
+
+	case models.PaymentSuccess:
+		if payment.Status == models.PaymentSuccess {
+			return nil
+		}
+
+		if err := s.paymentRepository.CompletePayment(tx, payment.ID, transactionID, models.PaymentSuccess); err != nil {
+			return err
+		}
+
+		return mapOrderError(s.orderService.MarkOrderPaid(tx, payment.OrderID))
+
+	case models.PaymentFailed:
+		if payment.Status == models.PaymentFailed {
+			return nil
+		}
+
+		if err := s.paymentRepository.CompletePayment(tx, payment.ID, transactionID, models.PaymentFailed); err != nil {
+			return err
+		}
+
+		return mapOrderError(s.orderService.CancelOrderByPaymentFailure(tx, payment.OrderID))
+
+	case models.PaymentRefunded:
+		if payment.Status == models.PaymentRefunded {
+			return nil
+		}
+
+		if err := s.paymentRepository.UpdateStatus(tx, payment.ID, models.PaymentRefunded); err != nil {
+			return err
+		}
+
+		return mapOrderError(s.orderService.RefundOrder(tx, payment.OrderID))
+
+	default:
+		return ErrUnknownWebhookEvent
+	}
 }
 
-func (s *Service) isPaymentFailed(
-	status models.PaymentStatus,
-) bool {
-
-	return status == models.PaymentFailed
+func (s *Service) validateOrderForPayment(status models.OrderStatus) error {
+	switch status {
+	case models.OrderPaid:
+		return ErrOrderAlreadyPaid
+	case models.OrderCancelled:
+		return ErrOrderCancelled
+	case models.OrderCreated, models.OrderPaymentPending:
+		return nil
+	default:
+		return ErrOrderNotEligibleForPayment
+	}
 }
 
-func (s *Service) isPaymentPending(
-	status models.PaymentStatus,
-) bool {
+func mapOrderError(err error) error {
+	if err == nil {
+		return nil
+	}
 
-	return status == models.PaymentPending
+	switch {
+	case errors.Is(err, ordermodule.ErrOrderNotFound):
+		return ErrOrderNotFound
+	case errors.Is(err, ordermodule.ErrOrderAlreadyCancelled):
+		return ErrOrderCancelled
+	case errors.Is(err, ordermodule.ErrOrderAlreadyCompleted),
+		errors.Is(err, ordermodule.ErrOrderCannotBeCancelled),
+		errors.Is(err, ordermodule.ErrInvalidOrderStatus):
+		return ErrOrderNotEligibleForPayment
+	default:
+		return err
+	}
 }
 
-func (s *Service) isPaymentRefunded(
-	status models.PaymentStatus,
-) bool {
+func isDuplicateKey(err error) bool {
+	message := strings.ToLower(err.Error())
 
-	return status == models.PaymentRefunded
+	return strings.Contains(message, "duplicate key") ||
+		strings.Contains(message, "duplicate entry") ||
+		strings.Contains(message, "unique constraint") ||
+		strings.Contains(message, "unique violation")
+}
+
+func rollbackOnPanic(tx *gorm.DB) {
+	if r := recover(); r != nil {
+		tx.Rollback()
+		panic(r)
+	}
 }
