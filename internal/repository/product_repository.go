@@ -43,6 +43,28 @@ func (r *ProductRepository) GetByID(id uuid.UUID) (*models.Product, error) {
 	return &product, nil
 }
 
+// GetByIDTx returns a product by its ID inside a transaction.
+func (r *ProductRepository) GetByIDTx(
+	tx *gorm.DB,
+	id uuid.UUID,
+) (*models.Product, error) {
+	var product models.Product
+
+	err := tx.
+		Preload("Category").
+		Preload("Inventory").
+		First(&product, "id = ?", id).Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+		return nil, err
+	}
+
+	return &product, nil
+}
+
 // GetBySKU returns a product by SKU.
 func (r *ProductRepository) GetBySKU(sku string) (*models.Product, error) {
 	var product models.Product
@@ -149,15 +171,15 @@ func (r *ProductRepository) CategoryExists(categoryID uuid.UUID) (bool, error) {
 // Update updates an existing product.
 func (r *ProductRepository) Update(product *models.Product) error {
 
-    return r.db.Model(&models.Product{}).
-        Where("id = ?", product.ID).
-        Updates(map[string]interface{}{
-            "name":         product.Name,
-            "description":  product.Description,
-            "sku":          product.SKU,
-            "price":        product.Price,
-            "category_id":  product.CategoryID,
-        }).Error
+	return r.db.Model(&models.Product{}).
+		Where("id = ?", product.ID).
+		Updates(map[string]interface{}{
+			"name":        product.Name,
+			"description": product.Description,
+			"sku":         product.SKU,
+			"price":       product.Price,
+			"category_id": product.CategoryID,
+		}).Error
 }
 
 // Delete soft deletes a product.
