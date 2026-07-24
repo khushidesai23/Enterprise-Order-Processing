@@ -113,8 +113,7 @@ func main() {
 	paymentService := payment.NewService(
 		paymentRepository,
 		paymentWebhookRepository,
-		orderRepository,
-		inventoryRepository,
+		orderService,
 		gateway,
 		cfg.RazorpayKeyID,
 	)
