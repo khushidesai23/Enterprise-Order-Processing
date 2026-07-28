@@ -1,9 +1,181 @@
 basePath: /api/v1
+definitions:
+  github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse:
+    properties:
+      data: {}
+      error:
+        type: string
+      message:
+        type: string
+      success:
+        type: boolean
+      timestamp:
+        type: string
+    type: object
+  internal_modules_user.CreateUserRequest:
+    properties:
+      email:
+        type: string
+      first_name:
+        maxLength: 100
+        minLength: 2
+        type: string
+      last_name:
+        maxLength: 100
+        type: string
+      password:
+        minLength: 8
+        type: string
+    required:
+    - email
+    - first_name
+    - password
+    type: object
+  internal_modules_user.UpdateUserRequest:
+    properties:
+      first_name:
+        type: string
+      is_active:
+        type: boolean
+      last_name:
+        type: string
+    type: object
 host: localhost:8080
 info:
   contact: {}
   description: Enterprise Order Processing & Payment Platform
   title: Enterprise Order Processing API
   version: "1.0"
-paths: {}
+paths:
+  /users:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of all users
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      summary: List Users
+      tags:
+      - Users
+    post:
+      consumes:
+      - application/json
+      description: Register a new user
+      parameters:
+      - description: User
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_modules_user.CreateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      summary: Create User
+      tags:
+      - Users
+  /users/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete user by ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      summary: Delete User
+      tags:
+      - Users
+    get:
+      consumes:
+      - application/json
+      description: Get user details by ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      summary: Get User by ID
+      tags:
+      - Users
+    put:
+      consumes:
+      - application/json
+      description: Update user details by ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: User
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_modules_user.UpdateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      summary: Update User
+      tags:
+      - Users
 swagger: "2.0"

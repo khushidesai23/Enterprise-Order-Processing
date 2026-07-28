@@ -20,6 +20,18 @@ func NewHandler(service Service) *Handler {
 	}
 }
 
+// CreateUser
+//
+// @Summary Create User
+// @Description Register a new user
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Param request body CreateUserRequest true "User"
+// @Success 201 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Failure 409 {object} response.APIResponse
+// @Router /users [post]
 func (h *Handler) Create(c *gin.Context) {
 
 	var req CreateUserRequest
@@ -48,6 +60,17 @@ func (h *Handler) Create(c *gin.Context) {
 	response.Created(c, "user created successfully", user)
 }
 
+// GetUserByID
+//
+// @Summary Get User by ID
+// @Description Get user details by ID
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Param id path string true "User ID"
+// @Success 200 {object} response.APIResponse
+// @Failure 404 {object} response.APIResponse
+// @Router /users/{id} [get]
 func (h *Handler) GetByID(c *gin.Context) {
 
 	id, err := uuid.Parse(c.Param("id"))
@@ -73,6 +96,16 @@ func (h *Handler) GetByID(c *gin.Context) {
 	response.OK(c, "user fetched successfully", user)
 }
 
+// ListUsers
+//
+// @Summary List Users
+// @Description Get a list of all users
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.APIResponse
+// @Failure 500 {object} response.APIResponse
+// @Router /users [get]
 func (h *Handler) List(c *gin.Context) {
 
 	users, err := h.service.List(c.Request.Context())
@@ -85,6 +118,19 @@ func (h *Handler) List(c *gin.Context) {
 	response.OK(c, "users fetched successfully", users)
 }
 
+// UpdateUser
+//
+// @Summary Update User
+// @Description Update user details by ID
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Param id path string true "User ID"
+// @Param request body UpdateUserRequest true "User"
+// @Success 200 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Failure 404 {object} response.APIResponse
+// @Router /users/{id} [put]
 func (h *Handler) Update(c *gin.Context) {
 
 	id, err := uuid.Parse(c.Param("id"))
@@ -122,6 +168,17 @@ func (h *Handler) Update(c *gin.Context) {
 	response.OK(c, "user updated successfully", user)
 }
 
+// DeleteUser
+//
+// @Summary Delete User
+// @Description Delete user by ID
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Param id path string true "User ID"
+// @Success 200 {object} response.APIResponse
+// @Failure 404 {object} response.APIResponse
+// @Router /users/{id} [delete]
 func (h *Handler) Delete(c *gin.Context) {
 
 	id, err := uuid.Parse(c.Param("id"))

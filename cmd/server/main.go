@@ -1,3 +1,9 @@
+// @title Enterprise Order Processing API
+// @version 1.0
+// @description Enterprise Order Processing & Payment Platform
+// @host localhost:8080
+// @BasePath /api/v1
+
 package main
 
 import (
@@ -28,12 +34,6 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 	_ "github.com/khushidesai23/Enterprise-Order-Processing/docs"
 )
-
-// @title Enterprise Order Processing API
-// @version 1.0
-// @description Enterprise Order Processing & Payment Platform
-// @host localhost:8080
-// @BasePath /api/v1
 
 func main() {
 
