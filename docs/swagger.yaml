@@ -1,0 +1,9 @@
+basePath: /api/v1
+host: localhost:8080
+info:
+  contact: {}
+  description: Enterprise Order Processing & Payment Platform
+  title: Enterprise Order Processing API
+  version: "1.0"
+paths: {}
+swagger: "2.0"
