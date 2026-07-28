@@ -4,13 +4,15 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/handlers"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/user"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/product"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/category"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/inventory"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/order"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/payment"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/product"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/user"
 
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func Register(
@@ -25,6 +27,10 @@ func Register(
 ) {
 
 	router.GET("/", healthHandler.Root)
+	router.GET(
+		"/swagger/*any",
+		ginSwagger.WrapHandler(swaggerFiles.Handler),
+	)
 
 	api := router.Group("/api/v1")
 
