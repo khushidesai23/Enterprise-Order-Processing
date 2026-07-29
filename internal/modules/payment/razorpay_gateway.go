@@ -56,7 +56,10 @@ func (g *RazorpayGateway) CreateOrder(
 
 	order, err := g.client.Order.Create(data, nil)
 	if err != nil {
-		return nil, ErrGatewayOrderCreation
+		return nil, fmt.Errorf(
+			"razorpay create order failed: %w",
+			err,
+		)
 	}
 
 	orderID, ok := order["id"].(string)
