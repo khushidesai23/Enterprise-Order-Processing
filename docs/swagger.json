@@ -219,6 +219,1255 @@
                 }
             }
         },
+        "/inventory": {
+            "get": {
+                "description": "Get all inventory records",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Inventory"
+                ],
+                "summary": "Get Inventories",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Create a new inventory record",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Inventory"
+                ],
+                "summary": "Create Inventory",
+                "parameters": [
+                    {
+                        "description": "Inventory",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_modules_inventory.CreateInventoryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory/{productId}": {
+            "get": {
+                "description": "Get inventory details by product ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Inventory"
+                ],
+                "summary": "Get Inventory by Product ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "productId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "Update inventory details by product ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Inventory"
+                ],
+                "summary": "Update Inventory by Product ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "productId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Inventory Update",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_modules_inventory.UpdateInventoryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory/{productId}/add-stock": {
+            "patch": {
+                "description": "Add stock to inventory by product ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Inventory"
+                ],
+                "summary": "Add Stock to Inventory",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "productId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Stock Operation",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_modules_inventory.StockOperationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory/{productId}/confirm": {
+            "patch": {
+                "description": "Confirm reserved stock in inventory by product ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Inventory"
+                ],
+                "summary": "Confirm Reserved Stock in Inventory",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "productId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Stock Operation",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_modules_inventory.StockOperationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory/{productId}/release": {
+            "patch": {
+                "description": "Release reserved stock in inventory by product ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Inventory"
+                ],
+                "summary": "Release Reserved Stock in Inventory",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "productId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Stock Operation",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_modules_inventory.StockOperationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory/{productId}/remove-stock": {
+            "patch": {
+                "description": "Remove stock from inventory by product ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Inventory"
+                ],
+                "summary": "Remove Stock from Inventory",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "productId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Stock Operation",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_modules_inventory.StockOperationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory/{productId}/reserve": {
+            "patch": {
+                "description": "Reserve stock in inventory by product ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Inventory"
+                ],
+                "summary": "Reserve Stock in Inventory",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "productId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Stock Operation",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_modules_inventory.StockOperationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/orders": {
+            "get": {
+                "description": "Get all orders",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Get Orders",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Create a new order",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Create Order",
+                "parameters": [
+                    {
+                        "description": "Order",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_modules_order.CreateOrderRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/user/{userId}": {
+            "get": {
+                "description": "Get all orders for a specific user by user ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Get Orders by User ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "userId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/{id}": {
+            "get": {
+                "description": "Get order details by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Get Order by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/{id}/cancel": {
+            "patch": {
+                "description": "Cancel an order by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Cancel Order",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/{id}/status": {
+            "patch": {
+                "description": "Update the status of an order by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Update Order Status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Order Status",
+                        "name": "status",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_modules_order.UpdateOrderStatusRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/payments": {
+            "get": {
+                "description": "Get all payments",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Get Payments",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Create a new payment for an order",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Create Payment",
+                "parameters": [
+                    {
+                        "description": "Payment",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_modules_payment.CreatePaymentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/payments/order/{orderId}": {
+            "get": {
+                "description": "Get a payment by order ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Get Payment by Order ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID",
+                        "name": "orderId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/payments/summary": {
+            "get": {
+                "description": "Get a summary of payments",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Get Payment Summary",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/payments/webhook": {
+            "post": {
+                "description": "Process a payment webhook from Razorpay",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Process Payment Webhook",
+                "parameters": [
+                    {
+                        "description": "Webhook Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_modules_payment.ProcessWebhookRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/payments/{id}": {
+            "get": {
+                "description": "Get a payment by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Get Payment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Payment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/payments/{id}/refund": {
+            "post": {
+                "description": "Refund a payment by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Refund Payment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Payment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/products": {
+            "get": {
+                "description": "Get all products",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Products"
+                ],
+                "summary": "Get Products",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Create a new product",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Products"
+                ],
+                "summary": "Create Product",
+                "parameters": [
+                    {
+                        "description": "Product",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_modules_product.CreateProductRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/products/category/{categoryId}": {
+            "get": {
+                "description": "Get products by category ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Products"
+                ],
+                "summary": "Get Products by Category",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Category ID",
+                        "name": "categoryId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/products/{id}": {
+            "get": {
+                "description": "Get product details by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Products"
+                ],
+                "summary": "Get Product by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "Update product details by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Products"
+                ],
+                "summary": "Update Product",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Product",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_modules_product.UpdateProductRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Delete product by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Products"
+                ],
+                "summary": "Delete Product",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/users": {
             "get": {
                 "description": "Get a list of all users",
@@ -437,6 +1686,27 @@
                 }
             }
         },
+        "github_com_khushidesai23_Enterprise-Order-Processing_internal_models.OrderStatus": {
+            "type": "string",
+            "enum": [
+                "CREATED",
+                "PAYMENT_PENDING",
+                "PAID",
+                "PACKED",
+                "SHIPPED",
+                "DELIVERED",
+                "CANCELLED"
+            ],
+            "x-enum-varnames": [
+                "OrderCreated",
+                "OrderPaymentPending",
+                "OrderPaid",
+                "OrderPacked",
+                "OrderShipped",
+                "OrderDelivered",
+                "OrderCancelled"
+            ]
+        },
         "internal_modules_category.CreateCategoryRequest": {
             "type": "object",
             "required": [
@@ -465,6 +1735,178 @@
                     "maxLength": 500
                 },
                 "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2
+                }
+            }
+        },
+        "internal_modules_inventory.CreateInventoryRequest": {
+            "type": "object",
+            "required": [
+                "product_id"
+            ],
+            "properties": {
+                "available_quantity": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "product_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_modules_inventory.StockOperationRequest": {
+            "type": "object",
+            "required": [
+                "quantity"
+            ],
+            "properties": {
+                "quantity": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_modules_inventory.UpdateInventoryRequest": {
+            "type": "object",
+            "properties": {
+                "available_quantity": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "reserved_quantity": {
+                    "type": "integer",
+                    "minimum": 0
+                }
+            }
+        },
+        "internal_modules_order.CreateOrderItemRequest": {
+            "type": "object",
+            "required": [
+                "product_id",
+                "quantity"
+            ],
+            "properties": {
+                "product_id": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_modules_order.CreateOrderRequest": {
+            "type": "object",
+            "required": [
+                "items",
+                "user_id"
+            ],
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/internal_modules_order.CreateOrderItemRequest"
+                    }
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_modules_order.UpdateOrderStatusRequest": {
+            "type": "object",
+            "required": [
+                "status"
+            ],
+            "properties": {
+                "status": {
+                    "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_models.OrderStatus"
+                }
+            }
+        },
+        "internal_modules_payment.CreatePaymentRequest": {
+            "type": "object",
+            "required": [
+                "order_id"
+            ],
+            "properties": {
+                "order_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_modules_payment.ProcessWebhookRequest": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer",
+                        "format": "int32"
+                    }
+                },
+                "signature": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_modules_product.CreateProductRequest": {
+            "type": "object",
+            "required": [
+                "category_id",
+                "name",
+                "price",
+                "sku"
+            ],
+            "properties": {
+                "category_id": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 1000
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 2
+                },
+                "price": {
+                    "type": "number"
+                },
+                "sku": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2
+                }
+            }
+        },
+        "internal_modules_product.UpdateProductRequest": {
+            "type": "object",
+            "required": [
+                "category_id",
+                "name",
+                "price",
+                "sku"
+            ],
+            "properties": {
+                "category_id": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 1000
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 2
+                },
+                "price": {
+                    "type": "number"
+                },
+                "sku": {
                     "type": "string",
                     "maxLength": 100,
                     "minLength": 2
