@@ -242,7 +242,13 @@ func (s *Service) ProcessWebhook(
 		return err
 	}
 
-	payment, err := s.paymentRepository.GetByGatewayOrderIDTx(tx, webhook.GatewayOrderID())
+	gatewayOrderID := webhook.GatewayOrderID()
+	if gatewayOrderID == nil {
+		tx.Rollback()
+		return ErrPaymentNotFound
+	}
+
+	payment, err := s.paymentRepository.GetByGatewayOrderIDTx(tx, *gatewayOrderID)
 	if err != nil {
 		tx.Rollback()
 
@@ -332,7 +338,7 @@ func (s *Service) RefundPayment(
 func (s *Service) applyWebhookPaymentStatus(
 	tx *gorm.DB,
 	payment *models.Payment,
-	transactionID string,
+	transactionID *string,
 	status models.PaymentStatus,
 ) error {
 

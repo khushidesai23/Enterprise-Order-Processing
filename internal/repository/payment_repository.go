@@ -228,9 +228,8 @@ func (r *PaymentRepository) UpdateStatus(
 func (r *PaymentRepository) UpdateTransaction(
 	tx *gorm.DB,
 	id uuid.UUID,
-	transactionID string,
+	transactionID *string,
 ) error {
-
 	return tx.
 		Model(&models.Payment{}).
 		Where("id = ?", id).
@@ -255,7 +254,7 @@ func (r *PaymentRepository) UpdateGatewayOrder(
 func (r *PaymentRepository) CompletePayment(
 	tx *gorm.DB,
 	id uuid.UUID,
-	transactionID string,
+	transactionID *string,
 	status models.PaymentStatus,
 ) error {
 
