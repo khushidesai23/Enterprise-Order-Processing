@@ -237,9 +237,15 @@ func (h *Handler) ProcessWebhook(c *gin.Context) {
 		return
 	}
 
+	eventID := c.GetHeader("X-Razorpay-Event-Id")
+	if eventID == "" {
+		eventID = c.GetHeader("X-Razorpay-Request-Id")
+	}
+
 	req := ProcessWebhookRequest{
 		Body:      body,
 		Signature: signature,
+		EventID:   eventID,
 	}
 
 	if err := h.service.ProcessWebhook(
@@ -291,6 +297,17 @@ func (h *Handler) ProcessWebhook(c *gin.Context) {
 }
 
 // POST /payments/:id/refund
+// @Summary Refund Payment
+// @Description Refund a payment by ID
+// @Tags Payments
+// @Accept json
+// @Produce json
+// @Param id path string true "Payment ID"
+// @Success 200 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Failure 404 {object} response.APIResponse
+// @Failure 500 {object} response.APIResponse
+// @Router /payments/{id}/refund [post]
 func (h *Handler) RefundPayment(c *gin.Context) {
 
 	id, err := uuid.Parse(c.Param("id"))
@@ -339,8 +356,5 @@ func (h *Handler) RefundPayment(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    response,
-	})
+	response.OK(c, "payment refunded successfully", refundResp)
 }
