@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/response"
 )
 
 type Handler struct {
@@ -19,14 +20,21 @@ func NewHandler(service *Service) *Handler {
 }
 
 // POST /categories
+// @Summary Create Category
+// @Description Create a new category
+// @Tags Categories
+// @Accept json
+// @Produce json
+// @Param request body CreateCategoryRequest true "Category"
+// @Success 201 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Failure 409 {object} response.APIResponse
+// @Router /categories [post]
 func (h *Handler) CreateCategory(c *gin.Context) {
 	var req CreateCategoryRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": err.Error(),
-		})
+		response.Error(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -35,53 +43,53 @@ func (h *Handler) CreateCategory(c *gin.Context) {
 
 		switch {
 		case errors.Is(err, ErrCategoryNameExists):
-			c.JSON(http.StatusConflict, gin.H{
-				"success": false,
-				"message": err.Error(),
-			})
+			response.Error(c, http.StatusConflict, err.Error())
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": err.Error(),
-		})
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"success": true,
-		"data":    category,
-	})
+	response.Created(c, "category created successfully", category)
 }
 
 // GET /categories
+// @Summary Get Categories
+// @Description Get all categories
+// @Tags Categories
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.APIResponse
+// @Failure 500 {object} response.APIResponse
+// @Router /categories [get]
 func (h *Handler) GetCategories(c *gin.Context) {
 
 	categories, err := h.service.GetCategories()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": err.Error(),
-		})
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    categories,
-	})
+	response.OK(c, "categories retrieved successfully", categories)
 }
 
 // GET /categories/:id
+// @Summary Get Category by ID
+// @Description Get category details by ID
+// @Tags Categories
+// @Accept json
+// @Produce json
+// @Param id path string true "Category ID"
+// @Success 200 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Failure 404 {object} response.APIResponse
+// @Router /categories/{id} [get]
 func (h *Handler) GetCategory(c *gin.Context) {
 
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": ErrInvalidCategoryID.Error(),
-		})
+		response.Error(c, http.StatusBadRequest, ErrInvalidCategoryID.Error())
 		return
 	}
 
@@ -90,45 +98,41 @@ func (h *Handler) GetCategory(c *gin.Context) {
 
 		switch {
 		case errors.Is(err, ErrCategoryNotFound):
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"message": err.Error(),
-			})
+			response.Error(c, http.StatusNotFound, err.Error())
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": err.Error(),
-		})
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    category,
-	})
+	response.OK(c, "category retrieved successfully", category)
 }
 
 // PUT /categories/:id
+// @Summary Update Category
+// @Description Update category details by ID
+// @Tags Categories
+// @Accept json
+// @Produce json
+// @Param id path string true "Category ID"
+// @Param request body UpdateCategoryRequest true "Updated Category"
+// @Success 200 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Failure 404 {object} response.APIResponse
+// @Router /categories/{id} [put]
 func (h *Handler) UpdateCategory(c *gin.Context) {
 
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": ErrInvalidCategoryID.Error(),
-		})
+		response.Error(c, http.StatusBadRequest, ErrInvalidCategoryID.Error())
 		return
 	}
 
 	var req UpdateCategoryRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": err.Error(),
-		})
+		response.Error(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -138,42 +142,37 @@ func (h *Handler) UpdateCategory(c *gin.Context) {
 		switch {
 
 		case errors.Is(err, ErrCategoryNotFound):
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"message": err.Error(),
-			})
+			response.Error(c, http.StatusNotFound, err.Error())
 			return
 
 		case errors.Is(err, ErrCategoryNameExists):
-			c.JSON(http.StatusConflict, gin.H{
-				"success": false,
-				"message": err.Error(),
-			})
+			response.Error(c, http.StatusConflict, err.Error())
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": err.Error(),
-		})
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    category,
-	})
+	response.OK(c, "category updated successfully", category)
 }
 
 // DELETE /categories/:id
+// @Summary Delete Category
+// @Description Delete category by ID
+// @Tags Categories
+// @Accept json
+// @Produce json
+// @Param id path string true "Category ID"
+// @Success 200 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Failure 404 {object} response.APIResponse
+// @Router /categories/{id} [delete]
 func (h *Handler) DeleteCategory(c *gin.Context) {
 
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": ErrInvalidCategoryID.Error(),
-		})
+		response.Error(c, http.StatusBadRequest, ErrInvalidCategoryID.Error())
 		return
 	}
 
@@ -183,29 +182,17 @@ func (h *Handler) DeleteCategory(c *gin.Context) {
 		switch {
 
 		case errors.Is(err, ErrCategoryNotFound):
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"message": err.Error(),
-			})
+			response.Error(c, http.StatusNotFound, err.Error())
 			return
 
 		case errors.Is(err, ErrCategoryInUse):
-			c.JSON(http.StatusConflict, gin.H{
-				"success": false,
-				"message": err.Error(),
-			})
+			response.Error(c, http.StatusConflict, err.Error())
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": err.Error(),
-		})
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Category deleted successfully",
-	})
+	response.OK(c, "category deleted successfully", nil)
 }

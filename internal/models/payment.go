@@ -18,16 +18,16 @@ type Payment struct {
 	OrderID uuid.UUID `gorm:"uniqueIndex;not null"`
 
 	// Razorpay Order ID
-	GatewayOrderID string `gorm:"size:255;uniqueIndex"`
+	GatewayOrderID string `gorm:"size:255;uniqueIndex;not null"`
 
 	// Razorpay Payment ID
-	TransactionID string `gorm:"size:255;uniqueIndex"`
+	TransactionID *string `gorm:"size:255;uniqueIndex"`
 
 	Status PaymentStatus `gorm:"size:30;not null"`
 
 	Amount float64 `gorm:"type:numeric(12,2);not null"`
 
-	Currency string `gorm:"size:10;default:'INR'"`
+	Currency string `gorm:"size:10;not null;default:'INR'"`
 
-	Gateway string `gorm:"size:30;default:'RAZORPAY'"`
+	Gateway string `gorm:"size:30;not null;default:'RAZORPAY'"`
 }
