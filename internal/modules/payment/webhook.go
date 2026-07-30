@@ -82,7 +82,10 @@ func (w *RazorpayWebhook) PaymentStatus() (models.PaymentStatus, error) {
 
 // Helper Getters
 func (w *RazorpayWebhook) PayloadID() string {
-	return w.Payload.ID
+	if w.Payload.Payment.Entity.ID != "" {
+		return w.Payload.Payment.Entity.ID
+	}
+	return ""
 }
 
 func (w *RazorpayWebhook) EventName() string {
