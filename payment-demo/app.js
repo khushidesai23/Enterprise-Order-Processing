@@ -41,40 +41,58 @@ async function payNow() {
 
     const payment = result.data;
 
-    const options = {
+const options = {
 
-        key: payment.key_id,
+    key: payment.key_id,
 
-        amount: payment.amount * 100,
+    order_id: payment.gateway_order_id,
 
-        currency: payment.currency,
+    amount: payment.amount * 100,
 
-        order_id: payment.gateway_order_id,
+    currency: payment.currency,
 
-        name: "Enterprise Order Processing",
+    name: "Enterprise Order Processing",
 
-        description: "Order Payment",
+    description: "Order Payment",
 
-        handler: function (response) {
+    image: "https://razorpay.com/favicon.png",
 
-            console.log(response);
+    prefill: {
 
-            alert("Payment Successful!");
+        name: "Test User",
 
-        },
+        email: "test@example.com",
 
-        prefill: {
+        contact: "9999999999"
+    },
 
-            email: "test@example.com",
+    notes: {
 
-            contact: "9999999999"
-        },
+        order_id: payment.order_id
+    },
 
-        theme: {
+    theme: {
 
-            color: "#2563eb"
+        color: "#2563eb"
+    },
+
+    modal: {
+
+        ondismiss: function () {
+
+            console.log("Checkout Closed");
         }
-    };
+    },
+
+    handler: function (response) {
+
+        console.log("Payment Successful");
+
+        console.log(response);
+
+        alert("Payment Successful");
+    }
+};
 
     const razorpay = new Razorpay(options);
 
