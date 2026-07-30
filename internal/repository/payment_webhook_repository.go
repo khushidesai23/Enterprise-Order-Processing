@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -58,7 +59,7 @@ func (r *PaymentWebhookRepository) GetByPayloadID(
 func (r *PaymentWebhookRepository) MarkProcessed(
 	tx *gorm.DB,
 	payloadID string,
-	processedAt int64,
+	processedAt time.Time,
 ) error {
 
 	return tx.
@@ -75,7 +76,7 @@ func (r *PaymentWebhookRepository) MarkProcessed(
 func (r *PaymentWebhookRepository) MarkFailed(
 	tx *gorm.DB,
 	payloadID string,
-	processedAt int64,
+	processedAt time.Time,
 ) error {
 
 	return tx.

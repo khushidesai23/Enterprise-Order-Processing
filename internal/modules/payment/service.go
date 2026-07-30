@@ -208,6 +208,7 @@ func (s *Service) ProcessWebhook(
 	if err != nil {
 		return err
 	}
+	println("Event ID:", req.EventID)
 
 	status, err := webhook.PaymentStatus()
 	if err != nil {
@@ -223,7 +224,7 @@ func (s *Service) ProcessWebhook(
 
 	webhookRecord := &models.PaymentWebhook{
 		Gateway:        "RAZORPAY",
-		PayloadID:      webhook.PayloadID(),
+		PayloadID:      req.EventID,
 		Event:          webhook.EventName(),
 		AccountID:      webhook.GatewayAccountID(),
 		TransactionID:  webhook.TransactionID(),
@@ -260,12 +261,12 @@ func (s *Service) ProcessWebhook(
 	}
 
 	if err := s.applyWebhookPaymentStatus(tx, payment, webhook.TransactionID(), status); err != nil {
-		_ = s.webhookRepository.MarkFailed(tx, webhook.PayloadID(), time.Now().Unix())
+		_ = s.webhookRepository.MarkFailed(tx, req.EventID, time.Now())
 		tx.Rollback()
 		return err
 	}
 
-	if err := s.webhookRepository.MarkProcessed(tx, webhook.PayloadID(), time.Now().Unix()); err != nil {
+	if err := s.webhookRepository.MarkProcessed(tx, req.EventID, time.Now()); err != nil {
 		tx.Rollback()
 		return err
 	}
