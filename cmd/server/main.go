@@ -132,6 +132,8 @@ func main() {
 	router.Use(gin.Recovery())
 	router.Use(middleware.RequestLogger(log))
 
+	router.Use(middleware.CORS())
+
 	routes.Register(
 		router,
 		healthHandler,
