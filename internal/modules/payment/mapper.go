@@ -52,6 +52,10 @@ func ToCheckoutResponse(
 func ToPaymentResponse(
 	payment *models.Payment,
 ) PaymentResponse {
+	var transactionID string
+	if payment.TransactionID != nil {
+		transactionID = *payment.TransactionID
+	}
 
 	return PaymentResponse{
 		ID: payment.ID,
@@ -60,7 +64,7 @@ func ToPaymentResponse(
 
 		GatewayOrderID: payment.GatewayOrderID,
 
-		TransactionID: payment.TransactionID,
+		TransactionID: transactionID,
 
 		Status: payment.Status,
 

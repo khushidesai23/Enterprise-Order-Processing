@@ -1,5 +1,7 @@
 package models
 
+// User represents a user in the system.
+// swagger:model User
 type User struct {
 	BaseModel
 

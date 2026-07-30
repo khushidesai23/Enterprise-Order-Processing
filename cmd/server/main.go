@@ -1,3 +1,9 @@
+// @title Enterprise Order Processing API
+// @version 1.0
+// @description Enterprise Order Processing & Payment Platform
+// @host localhost:8080
+// @BasePath /api/v1
+
 package main
 
 import (
@@ -26,6 +32,7 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/user"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
+	_ "github.com/khushidesai23/Enterprise-Order-Processing/docs"
 )
 
 func main() {
@@ -124,6 +131,8 @@ func main() {
 
 	router.Use(gin.Recovery())
 	router.Use(middleware.RequestLogger(log))
+
+	router.Use(middleware.CORS())
 
 	routes.Register(
 		router,

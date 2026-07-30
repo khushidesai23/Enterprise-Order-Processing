@@ -82,27 +82,43 @@ func (w *RazorpayWebhook) PaymentStatus() (models.PaymentStatus, error) {
 
 // Helper Getters
 func (w *RazorpayWebhook) PayloadID() string {
-	return w.Payload.ID
+	if w.Payload.Payment.Entity.ID != "" {
+		return w.Payload.Payment.Entity.ID
+	}
+	return ""
 }
 
 func (w *RazorpayWebhook) EventName() string {
 	return w.Event
 }
 
-func (w *RazorpayWebhook) GatewayAccountID() string {
-	return w.AccountID
+func (w *RazorpayWebhook) GatewayAccountID() *string {
+	if w.AccountID == "" {
+		return nil
+	}
+	id := w.AccountID
+	return &id
 }
 
 func (w *RazorpayWebhook) WebhookCreatedAt() int64 {
 	return w.CreatedAt
 }
 
-func (w *RazorpayWebhook) GatewayOrderID() string {
-	return w.Payload.Payment.Entity.OrderID
+func (w *RazorpayWebhook) GatewayOrderID() *string {
+
+	if w.Payload.Payment.Entity.OrderID == "" {
+		return nil
+	}
+	id := w.Payload.Payment.Entity.OrderID
+	return &id
 }
 
-func (w *RazorpayWebhook) TransactionID() string {
-	return w.Payload.Payment.Entity.ID
+func (w *RazorpayWebhook) TransactionID() *string {
+	if w.Payload.Payment.Entity.ID == "" {
+		return nil
+	}
+	id := w.Payload.Payment.Entity.ID
+	return &id
 }
 
 func (w *RazorpayWebhook) Amount() int64 {
