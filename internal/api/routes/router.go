@@ -10,6 +10,7 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/payment"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/product"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/user"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/auth"
 
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -24,6 +25,7 @@ func Register(
 	inventoryHandler *inventory.Handler,
 	orderHandler *order.Handler,
 	paymentHandler *payment.Handler,
+	authHandler *auth.Handler,
 ) {
 
 	router.GET("/", healthHandler.Root)
@@ -45,5 +47,6 @@ func Register(
 		inventory.RegisterRoutes(api, inventoryHandler)
 		order.RegisterRoutes(api, orderHandler)
 		payment.RegisterRoutes(api, paymentHandler)
+		auth.RegisterRoutes(api, authHandler)
 	}
 }
