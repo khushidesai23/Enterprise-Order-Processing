@@ -30,6 +30,7 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/payment"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/product"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/user"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/auth"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 	_ "github.com/khushidesai23/Enterprise-Order-Processing/docs"
@@ -91,6 +92,9 @@ func main() {
 	userService := user.NewService(userRepository)
 	userHandler := user.NewHandler(userService)
 
+	authService := auth.NewService(userRepository, cfg)
+	authHandler := auth.NewHandler(authService)
+
 	productRepository := repository.NewProductRepository(db.DB)
 	productService := product.NewService(productRepository)
 	productHandler := product.NewHandler(productService)
@@ -143,6 +147,7 @@ func main() {
 		inventoryHandler,
 		orderHandler,
 		paymentHandler,
+		authHandler,
 	)
 
 	// HTTP Server
