@@ -20,16 +20,14 @@ type Service struct {
 
 func NewService(
 	userRepository repository.UserRepository,
+	jwtManager *JWTManager,
 	config *config.Config,
 ) *Service {
 
 	return &Service{
 		userRepository: userRepository,
-		jwt: NewJWTManager(
-			config.JWTSecret,
-			config.JWTExpiration,
-		),
-		config: config,
+		jwt:            jwtManager,
+		config:         config,
 	}
 }
 
@@ -50,10 +48,10 @@ func (s *Service) Login(
 		return nil, ErrInactiveUser
 	}
 
-	if !checkPasswordHash(
-		req.Password,
-		user.Password,
-	) {
+	if bcrypt.CompareHashAndPassword(
+		[]byte(user.Password),
+		[]byte(req.Password),
+	) != nil {
 		return nil, ErrInvalidCredentials
 	}
 
@@ -90,12 +88,7 @@ func (s *Service) VerifyToken(
 	token string,
 ) (*Claims, error) {
 
-	claims, err := s.jwt.VerifyToken(token)
-	if err != nil {
-		return nil, ErrInvalidToken
-	}
-
-	return claims, nil
+	return s.jwt.VerifyToken(token)
 }
 
 func (s *Service) GetCurrentUser(
@@ -127,8 +120,4 @@ func (s *Service) GetCurrentUser(
 
 		IsActive: user.IsActive,
 	}, nil
-}
-
-func checkPasswordHash(password, hash string) bool {
-	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
