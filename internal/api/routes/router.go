@@ -37,6 +37,8 @@ func Register(
 		ginSwagger.WrapHandler(swaggerFiles.Handler),
 	)
 
+	authMiddleware := middleware.AuthMiddleware(jwtManager)
+
 	api := router.Group("/api/v1")
 
 	{
@@ -45,14 +47,6 @@ func Register(
 		api.GET("/ready", healthHandler.Ready)
 		api.GET("/ping", healthHandler.Ping)
 		api.GET("/version", healthHandler.Version)
-
-		// Existing modules
-		user.RegisterRoutes(api, userHandler)
-		product.RegisterRoutes(api, productHandler)
-		category.RegisterRoutes(api, categoryHandler)
-		inventory.RegisterRoutes(api, inventoryHandler)
-		order.RegisterRoutes(api, orderHandler)
-		payment.RegisterRoutes(api, paymentHandler)
 
 		// Authentication
 		authGroup := api.Group("/auth")
@@ -64,9 +58,46 @@ func Register(
 
 			authGroup.GET(
 				"/me",
-				middleware.AuthMiddleware(jwtManager),
+				authMiddleware,
 				authHandler.Me,
 			)
 		}
+
+		// Modules
+		user.RegisterRoutes(
+			api,
+			userHandler,
+			authMiddleware,
+		)
+
+		category.RegisterRoutes(
+			api,
+			categoryHandler,
+			authMiddleware,
+		)
+
+		product.RegisterRoutes(
+			api,
+			productHandler,
+			authMiddleware,
+		)
+
+		inventory.RegisterRoutes(
+			api,
+			inventoryHandler,
+			authMiddleware,
+		)
+
+		order.RegisterRoutes(
+			api,
+			orderHandler,
+			authMiddleware,
+		)
+
+		payment.RegisterRoutes(
+			api,
+			paymentHandler,
+			authMiddleware,
+		)
 	}
 }

@@ -30,6 +30,16 @@ definitions:
     - OrderShipped
     - OrderDelivered
     - OrderCancelled
+  internal_modules_auth.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
   internal_modules_category.CreateCategoryRequest:
     properties:
       description:
@@ -124,6 +134,8 @@ definitions:
           format: int32
           type: integer
         type: array
+      eventID:
+        type: string
       signature:
         type: string
     type: object
@@ -208,6 +220,59 @@ info:
   title: Enterprise Order Processing API
   version: "1.0"
 paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user and generate JWT token
+      parameters:
+      - description: Login Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_modules_auth.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      summary: Login
+      tags:
+      - Authentication
+  /auth/me:
+    get:
+      description: Get currently authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Current User
+      tags:
+      - Authentication
   /categories:
     get:
       consumes:
@@ -253,6 +318,8 @@ paths:
           description: Conflict
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Create Category
       tags:
       - Categories
@@ -282,6 +349,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Delete Category
       tags:
       - Categories
@@ -344,6 +413,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Update Category
       tags:
       - Categories
@@ -363,6 +434,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Get Inventories
       tags:
       - Inventory
@@ -396,6 +469,8 @@ paths:
           description: Conflict
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Create Inventory
       tags:
       - Inventory
@@ -425,6 +500,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Get Inventory by Product ID
       tags:
       - Inventory
@@ -459,6 +536,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Update Inventory by Product ID
       tags:
       - Inventory
@@ -494,6 +573,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Add Stock to Inventory
       tags:
       - Inventory
@@ -529,6 +610,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Confirm Reserved Stock in Inventory
       tags:
       - Inventory
@@ -564,6 +647,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Release Reserved Stock in Inventory
       tags:
       - Inventory
@@ -599,6 +684,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Remove Stock from Inventory
       tags:
       - Inventory
@@ -634,6 +721,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Reserve Stock in Inventory
       tags:
       - Inventory
@@ -653,6 +742,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Get Orders
       tags:
       - Orders
@@ -682,6 +773,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Create Order
       tags:
       - Orders
@@ -711,6 +804,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Get Order by ID
       tags:
       - Orders
@@ -740,6 +835,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Cancel Order
       tags:
       - Orders
@@ -775,6 +872,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Update Order Status
       tags:
       - Orders
@@ -804,6 +903,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Get Orders by User ID
       tags:
       - Orders
@@ -823,6 +924,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Get Payments
       tags:
       - Payments
@@ -852,6 +955,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Create Payment
       tags:
       - Payments
@@ -881,6 +986,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Get Payment
       tags:
       - Payments
@@ -914,6 +1021,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Refund Payment
       tags:
       - Payments
@@ -943,6 +1052,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Get Payment by Order ID
       tags:
       - Payments
@@ -962,6 +1073,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Get Payment Summary
       tags:
       - Payments
@@ -1048,6 +1161,8 @@ paths:
           description: Conflict
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Create Product
       tags:
       - Products
@@ -1077,6 +1192,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Delete Product
       tags:
       - Products
@@ -1139,6 +1256,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Update Product
       tags:
       - Products
@@ -1187,6 +1306,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: List Users
       tags:
       - Users
@@ -1241,6 +1362,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Delete User
       tags:
       - Users
@@ -1265,6 +1388,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Get User by ID
       tags:
       - Users
@@ -1299,7 +1424,14 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Update User
       tags:
       - Users
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

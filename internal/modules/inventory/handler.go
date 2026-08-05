@@ -23,6 +23,7 @@ func NewHandler(service *Service) *Handler {
 // @Summary Create Inventory
 // @Description Create a new inventory record
 // @Tags Inventory
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param request body CreateInventoryRequest true "Inventory"
@@ -67,6 +68,7 @@ func (h *Handler) CreateInventory(c *gin.Context) {
 // @Summary Get Inventories
 // @Description Get all inventory records
 // @Tags Inventory
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Success 200 {object} response.APIResponse
@@ -87,6 +89,7 @@ func (h *Handler) GetInventories(c *gin.Context) {
 // @Summary Get Inventory by Product ID
 // @Description Get inventory details by product ID
 // @Tags Inventory
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param productId path string true "Product ID"
@@ -122,6 +125,7 @@ func (h *Handler) GetInventory(c *gin.Context) {
 // @Summary Update Inventory by Product ID
 // @Description Update inventory details by product ID
 // @Tags Inventory
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param productId path string true "Product ID"
@@ -170,6 +174,7 @@ func (h *Handler) UpdateInventory(c *gin.Context) {
 // @Summary Add Stock to Inventory
 // @Description Add stock to inventory by product ID
 // @Tags Inventory
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param productId path string true "Product ID"
@@ -187,6 +192,7 @@ func (h *Handler) AddStock(c *gin.Context) {
 // @Summary Remove Stock from Inventory
 // @Description Remove stock from inventory by product ID
 // @Tags Inventory
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param productId path string true "Product ID"
@@ -204,6 +210,7 @@ func (h *Handler) RemoveStock(c *gin.Context) {
 // @Summary Reserve Stock in Inventory
 // @Description Reserve stock in inventory by product ID
 // @Tags Inventory
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param productId path string true "Product ID"
@@ -221,6 +228,7 @@ func (h *Handler) ReserveStock(c *gin.Context) {
 // @Summary Release Reserved Stock in Inventory
 // @Description Release reserved stock in inventory by product ID
 // @Tags Inventory
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param productId path string true "Product ID"
@@ -238,6 +246,7 @@ func (h *Handler) ReleaseReservedStock(c *gin.Context) {
 // @Summary Confirm Reserved Stock in Inventory
 // @Description Confirm reserved stock in inventory by product ID
 // @Tags Inventory
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param productId path string true "Product ID"
