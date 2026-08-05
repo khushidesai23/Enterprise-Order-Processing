@@ -36,15 +36,18 @@ func (j *JWTManager) GenerateToken(
 	email string,
 ) (string, error) {
 
+	now := time.Now()
+
 	claims := Claims{
 		UserID: userID,
 		Email:  email,
 		RegisteredClaims: jwt.RegisteredClaims{
+			Subject: userID,
+
+			IssuedAt: jwt.NewNumericDate(now),
+
 			ExpiresAt: jwt.NewNumericDate(
-				time.Now().Add(j.expiry),
-			),
-			IssuedAt: jwt.NewNumericDate(
-				time.Now(),
+				now.Add(j.expiry),
 			),
 		},
 	}
@@ -66,8 +69,9 @@ func (j *JWTManager) VerifyToken(
 		&Claims{},
 		func(token *jwt.Token) (interface{}, error) {
 
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, errors.New("invalid signing method")
+			if token.Method != jwt.SigningMethodHS256 {
+
+				return nil, errors.New("unexpected signing method")
 			}
 
 			return j.secretKey, nil
@@ -81,6 +85,7 @@ func (j *JWTManager) VerifyToken(
 	claims, ok := token.Claims.(*Claims)
 
 	if !ok || !token.Valid {
+
 		return nil, errors.New("invalid token")
 	}
 
