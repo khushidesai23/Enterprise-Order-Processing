@@ -8,9 +8,16 @@ func RegisterRoutes(
 ) {
 
 	auth := router.Group("/auth")
-	{
-		auth.POST("/login", handler.Login)
 
-		auth.GET("/me", handler.Me)
+	{
+		auth.POST(
+			"/login",
+			handler.Login,
+		)
+
+		auth.GET(
+			"/me",
+			handler.Me,
+		)
 	}
 }

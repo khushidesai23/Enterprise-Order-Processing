@@ -3,7 +3,6 @@ package auth
 import (
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -44,7 +43,7 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	loginResp, err := h.service.Login(
+	loginResponse, err := h.service.Login(
 		c.Request.Context(),
 		req,
 	)
@@ -56,12 +55,20 @@ func (h *Handler) Login(c *gin.Context) {
 		case errors.Is(err, ErrInvalidCredentials),
 			errors.Is(err, ErrInactiveUser):
 
-			response.Error(c, http.StatusUnauthorized, err.Error())
+			response.Error(
+				c,
+				http.StatusUnauthorized,
+				err.Error(),
+			)
 			return
 
 		default:
 
-			response.Error(c, http.StatusInternalServerError, err.Error())
+			response.Error(
+				c,
+				http.StatusInternalServerError,
+				err.Error(),
+			)
 			return
 		}
 	}
@@ -69,48 +76,31 @@ func (h *Handler) Login(c *gin.Context) {
 	response.OK(
 		c,
 		"login successful",
-		loginResp,
+		loginResponse,
 	)
 }
 
-// Current User
+// Me
 //
 // @Summary Current User
-// @Description Returns the currently authenticated user
+// @Description Get currently authenticated user
 // @Tags Authentication
 // @Security BearerAuth
 // @Produce json
 // @Success 200 {object} response.APIResponse
 // @Failure 401 {object} response.APIResponse
+// @Failure 500 {object} response.APIResponse
 // @Router /auth/me [get]
 func (h *Handler) Me(c *gin.Context) {
 
-	authHeader := c.GetHeader("Authorization")
+	userID := c.GetString("user_id")
 
-	if authHeader == "" {
-
-		response.Error(
-			c,
-			http.StatusUnauthorized,
-			ErrMissingToken.Error(),
-		)
-
-		return
-	}
-
-	token := strings.TrimPrefix(
-		authHeader,
-		"Bearer ",
-	)
-
-	claims, err := h.service.VerifyToken(token)
-
-	if err != nil {
+	if userID == "" {
 
 		response.Error(
 			c,
 			http.StatusUnauthorized,
-			err.Error(),
+			ErrInvalidToken.Error(),
 		)
 
 		return
@@ -118,7 +108,7 @@ func (h *Handler) Me(c *gin.Context) {
 
 	user, err := h.service.GetCurrentUser(
 		c.Request.Context(),
-		claims.UserID,
+		userID,
 	)
 
 	if err != nil {
