@@ -24,6 +24,7 @@ func NewHandler(service *Service) *Handler {
 // @Summary Create Order
 // @Description Create a new order
 // @Tags Orders
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param request body CreateOrderRequest true "Order"
@@ -72,6 +73,7 @@ func (h *Handler) CreateOrder(c *gin.Context) {
 // @Summary Get Order by ID
 // @Description Get order details by ID
 // @Tags Orders
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param id path string true "Order ID"
@@ -109,6 +111,7 @@ func (h *Handler) GetOrder(c *gin.Context) {
 // @Summary Get Orders
 // @Description Get all orders
 // @Tags Orders
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Success 200 {object} response.APIResponse
@@ -130,6 +133,7 @@ func (h *Handler) GetOrders(c *gin.Context) {
 // @Summary Get Orders by User ID
 // @Description Get all orders for a specific user by user ID
 // @Tags Orders
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param userId path string true "User ID"
@@ -171,6 +175,7 @@ func (h *Handler) GetOrdersByUser(c *gin.Context) {
 // @Summary Update Order Status
 // @Description Update the status of an order by ID
 // @Tags Orders
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param id path string true "Order ID"
@@ -222,6 +227,7 @@ func (h *Handler) UpdateOrderStatus(c *gin.Context) {
 // @Summary Cancel Order
 // @Description Cancel an order by ID
 // @Tags Orders
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param id path string true "Order ID"

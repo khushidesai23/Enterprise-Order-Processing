@@ -5,25 +5,26 @@ import "github.com/gin-gonic/gin"
 func RegisterRoutes(
 	router *gin.RouterGroup,
 	handler *Handler,
+	auth gin.HandlerFunc,
 ) {
 	orders := router.Group("/orders")
 	{
 		// Create Order
-		orders.POST("", handler.CreateOrder)
+		orders.POST("", auth, handler.CreateOrder)
 
 		// List Orders
-		orders.GET("", handler.GetOrders)
+		orders.GET("", auth, handler.GetOrders)
 
 		// Get Single Order
-		orders.GET("/:id", handler.GetOrder)
+		orders.GET("/:id", auth, handler.GetOrder)
 
 		// Get Orders By User
-		orders.GET("/user/:userId", handler.GetOrdersByUser)
+		orders.GET("/user/:userId", auth, handler.GetOrdersByUser)
 
 		// Update Status
-		orders.PATCH("/:id/status", handler.UpdateOrderStatus)
+		orders.PATCH("/:id/status", auth, handler.UpdateOrderStatus)
 
 		// Cancel Order
-		orders.PATCH("/:id/cancel", handler.CancelOrder)
+		orders.PATCH("/:id/cancel", auth, handler.CancelOrder)
 	}
 }

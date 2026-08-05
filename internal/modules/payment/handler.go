@@ -26,6 +26,7 @@ func NewHandler(
 // @Summary Create Payment
 // @Description Create a new payment for an order
 // @Tags Payments
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param request body CreatePaymentRequest true "Payment"
@@ -73,6 +74,7 @@ func (h *Handler) CreatePayment(c *gin.Context) {
 // @Summary Get Payment
 // @Description Get a payment by ID
 // @Tags Payments
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param id path string true "Payment ID"
@@ -107,6 +109,7 @@ func (h *Handler) GetPayment(c *gin.Context) {
 // @Summary Get Payments
 // @Description Get all payments
 // @Tags Payments
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Success 200 {object} response.APIResponse
@@ -127,6 +130,7 @@ func (h *Handler) GetPayments(c *gin.Context) {
 // @Summary Get Payment by Order ID
 // @Description Get a payment by order ID
 // @Tags Payments
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param orderId path string true "Order ID"
@@ -163,6 +167,7 @@ func (h *Handler) GetPaymentByOrder(c *gin.Context) {
 // @Summary Get Payment Summary
 // @Description Get a summary of payments
 // @Tags Payments
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Success 200 {object} response.APIResponse
@@ -251,6 +256,7 @@ func (h *Handler) ProcessWebhook(c *gin.Context) {
 // @Summary Refund Payment
 // @Description Refund a payment by ID
 // @Tags Payments
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param id path string true "Payment ID"

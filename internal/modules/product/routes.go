@@ -5,10 +5,11 @@ import "github.com/gin-gonic/gin"
 func RegisterRoutes(
 	router *gin.RouterGroup,
 	handler *Handler,
+	auth gin.HandlerFunc,
 ) {
 	products := router.Group("/products")
 	{
-		products.POST("", handler.CreateProduct)
+		products.POST("", auth, handler.CreateProduct)
 
 		products.GET("", handler.GetProducts)
 
@@ -16,8 +17,8 @@ func RegisterRoutes(
 
 		products.GET("/category/:categoryId", handler.GetProductsByCategory)
 
-		products.PUT("/:id", handler.UpdateProduct)
+		products.PUT("/:id", auth, handler.UpdateProduct)
 
-		products.DELETE("/:id", handler.DeleteProduct)
+		products.DELETE("/:id", auth, handler.DeleteProduct)
 	}
 }

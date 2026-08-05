@@ -23,6 +23,7 @@ func NewHandler(service *Service) *Handler {
 // @Summary Create Category
 // @Description Create a new category
 // @Tags Categories
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param request body CreateCategoryRequest true "Category"
@@ -113,6 +114,7 @@ func (h *Handler) GetCategory(c *gin.Context) {
 // @Summary Update Category
 // @Description Update category details by ID
 // @Tags Categories
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param id path string true "Category ID"
@@ -161,6 +163,7 @@ func (h *Handler) UpdateCategory(c *gin.Context) {
 // @Summary Delete Category
 // @Description Delete category by ID
 // @Tags Categories
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param id path string true "Category ID"
