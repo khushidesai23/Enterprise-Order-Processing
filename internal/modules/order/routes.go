@@ -19,7 +19,7 @@ func RegisterRoutes(
 		orders.GET("/:id", auth, handler.GetOrder)
 
 		// Get Orders By User
-		orders.GET("/user/:userId", auth, handler.GetOrdersByUser)
+		orders.GET("/me", auth, handler.GetOrdersByUser)
 
 		// Update Status
 		orders.PATCH("/:id/status", auth, handler.UpdateOrderStatus)
