@@ -890,14 +890,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/orders/user/{userId}": {
+        "/orders/me": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get all orders for a specific user by user ID",
+                "description": "Get all orders for the authenticated user",
                 "consumes": [
                     "application/json"
                 ],
@@ -907,16 +907,7 @@ const docTemplate = `{
                 "tags": [
                     "Orders"
                 ],
-                "summary": "Get Orders by User ID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "User ID",
-                        "name": "userId",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
+                "summary": "Get Orders by Authenticated User",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -924,8 +915,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
                         }
                     },
-                    "400": {
-                        "description": "Bad Request",
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
                         }
@@ -2057,8 +2048,7 @@ const docTemplate = `{
         "internal_modules_order.CreateOrderRequest": {
             "type": "object",
             "required": [
-                "items",
-                "user_id"
+                "items"
             ],
             "properties": {
                 "items": {
@@ -2067,9 +2057,6 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/internal_modules_order.CreateOrderItemRequest"
                     }
-                },
-                "user_id": {
-                    "type": "string"
                 }
             }
         },

@@ -107,11 +107,8 @@ definitions:
           $ref: '#/definitions/internal_modules_order.CreateOrderItemRequest'
         minItems: 1
         type: array
-      user_id:
-        type: string
     required:
     - items
-    - user_id
     type: object
   internal_modules_order.UpdateOrderStatusRequest:
     properties:
@@ -877,17 +874,11 @@ paths:
       summary: Update Order Status
       tags:
       - Orders
-  /orders/user/{userId}:
+  /orders/me:
     get:
       consumes:
       - application/json
-      description: Get all orders for a specific user by user ID
-      parameters:
-      - description: User ID
-        in: path
-        name: userId
-        required: true
-        type: string
+      description: Get all orders for the authenticated user
       produces:
       - application/json
       responses:
@@ -895,8 +886,8 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
-        "400":
-          description: Bad Request
+        "401":
+          description: Unauthorized
           schema:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
         "404":
@@ -905,7 +896,7 @@ paths:
             $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
       security:
       - BearerAuth: []
-      summary: Get Orders by User ID
+      summary: Get Orders by Authenticated User
       tags:
       - Orders
   /payments:
