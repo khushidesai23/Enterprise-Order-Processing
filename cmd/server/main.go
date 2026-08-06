@@ -3,6 +3,9 @@
 // @description Enterprise Order Processing & Payment Platform
 // @host localhost:8080
 // @BasePath /api/v1
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
 
 package main
 
@@ -20,10 +23,12 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/config"
+	_ "github.com/khushidesai23/Enterprise-Order-Processing/docs"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/handlers"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/middleware"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/routes"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/database"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/auth"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/category"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/inventory"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/order"
@@ -32,7 +37,6 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/user"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
-	_ "github.com/khushidesai23/Enterprise-Order-Processing/docs"
 )
 
 func main() {
@@ -42,6 +46,12 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	//Initialize JWT Manager
+	jwtManager := auth.NewJWTManager(
+		cfg.JWTSecret,
+		cfg.JWTExpiration,
+	)
 
 	// Logger
 	log, err := logger.New(cfg.LogLevel)
@@ -90,6 +100,9 @@ func main() {
 	userRepository := repository.NewUserRepository(db.DB)
 	userService := user.NewService(userRepository)
 	userHandler := user.NewHandler(userService)
+
+	authService := auth.NewService(userRepository, jwtManager, cfg)
+	authHandler := auth.NewHandler(authService)
 
 	productRepository := repository.NewProductRepository(db.DB)
 	productService := product.NewService(productRepository)
@@ -143,6 +156,8 @@ func main() {
 		inventoryHandler,
 		orderHandler,
 		paymentHandler,
+		authHandler,
+		jwtManager,
 	)
 
 	// HTTP Server

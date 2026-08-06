@@ -23,6 +23,7 @@ func NewHandler(service *Service) *Handler {
 // @Summary Create Product
 // @Description Create a new product
 // @Tags Products
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param request body CreateProductRequest true "Product"
@@ -152,6 +153,7 @@ func (h *Handler) GetProductsByCategory(c *gin.Context) {
 // @Summary Update Product
 // @Description Update product details by ID
 // @Tags Products
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param id path string true "Product ID"
@@ -204,6 +206,7 @@ func (h *Handler) UpdateProduct(c *gin.Context) {
 // @Summary Delete Product
 // @Description Delete product by ID
 // @Tags Products
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param id path string true "Product ID"

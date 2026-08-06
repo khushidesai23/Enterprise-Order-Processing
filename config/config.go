@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -26,6 +27,9 @@ type Config struct {
 	RazorpayKeyID         string
 	RazorpayKeySecret     string
 	RazorpayWebhookSecret string
+
+	JWTSecret     string
+	JWTExpiration time.Duration
 
 	LogLevel string
 }
@@ -55,6 +59,11 @@ func Load() (*Config, error) {
 		RazorpayKeySecret:     viper.GetString("RAZORPAY_KEY_SECRET"),
 		RazorpayWebhookSecret: viper.GetString("RAZORPAY_WEBHOOK_SECRET"),
 
+		JWTSecret: viper.GetString("JWT_SECRET"),
+		JWTExpiration: mustParseDuration(
+			viper.GetString("JWT_EXPIRATION"),
+		),
+
 		LogLevel: viper.GetString("LOG_LEVEL"),
 	}
 
@@ -80,6 +89,9 @@ func setDefaults() {
 	viper.SetDefault("RAZORPAY_KEY_ID", "")
 	viper.SetDefault("RAZORPAY_KEY_SECRET", "")
 	viper.SetDefault("RAZORPAY_WEBHOOK_SECRET", "")
+
+	viper.SetDefault("JWT_SECRET", "")
+	viper.SetDefault("JWT_EXPIRATION", 24*time.Hour)
 
 	viper.SetDefault("LOG_LEVEL", "debug")
 }
@@ -118,6 +130,14 @@ func (c *Config) Validate() error {
 	if strings.TrimSpace(c.RazorpayWebhookSecret) == "" {
 		return errors.New("RAZORPAY_WEBHOOK_SECRET is required")
 	}
+
+	if strings.TrimSpace(c.JWTSecret) == "" {
+		return errors.New("JWT_SECRET is required")
+	}
+	if c.JWTExpiration <= 0 {
+		return errors.New("JWT_EXPIRATION is required")
+	}
+
 	if strings.TrimSpace(c.LogLevel) == "" {
 		return errors.New("LOG_LEVEL is required")
 	}
@@ -188,4 +208,12 @@ func loadDotEnv(path string) error {
 	}
 
 	return scanner.Err()
+}
+
+func mustParseDuration(value string) time.Duration {
+	d, err := time.ParseDuration(strings.TrimSpace(value))
+	if err != nil {
+		return 0
+	}
+	return d
 }

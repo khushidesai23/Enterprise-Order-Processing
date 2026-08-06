@@ -2,43 +2,93 @@
 <html lang="en">
 
 <head>
+
     <meta charset="UTF-8">
-    <title>Razorpay Checkout Demo</title>
+
+    <title>Enterprise Order Processing</title>
 
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 
     <style>
+
         body {
+
             font-family: Arial, sans-serif;
-            margin: 60px;
+
+            max-width: 700px;
+
+            margin: 50px auto;
         }
 
-        button {
-            padding: 12px 25px;
-            font-size: 16px;
-            cursor: pointer;
+        h2 {
+
+            margin-bottom: 20px;
         }
 
         input {
-            width: 500px;
+
+            width: 100%;
+
             padding: 10px;
-            margin-bottom: 20px;
+
+            margin-bottom: 15px;
         }
+
+        button {
+
+            padding: 12px 20px;
+
+            margin-right: 10px;
+
+            cursor: pointer;
+        }
+
+        #status {
+
+            margin-top: 20px;
+
+            color: green;
+
+            font-weight: bold;
+        }
+
     </style>
+
 </head>
 
 <body>
 
 <h2>Enterprise Order Processing</h2>
 
-<p>Order ID</p>
+<hr>
+
+<h3>Login</h3>
+
+<input
+        id="email"
+        placeholder="Email"
+/>
+
+<input
+        id="password"
+        type="password"
+        placeholder="Password"
+/>
+
+<button onclick="login()">
+
+    Login
+
+</button>
+
+<hr>
+
+<h3>Payment</h3>
 
 <input
         id="orderId"
-        placeholder="Paste Order UUID"
+        placeholder="Order UUID"
 />
-
-<br>
 
 <button onclick="payNow()">
 
@@ -46,7 +96,10 @@
 
 </button>
 
+<div id="status"></div>
+
 <script src="app.js"></script>
 
 </body>
+
 </html>

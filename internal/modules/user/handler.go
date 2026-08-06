@@ -65,6 +65,7 @@ func (h *Handler) Create(c *gin.Context) {
 // @Summary Get User by ID
 // @Description Get user details by ID
 // @Tags Users
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param id path string true "User ID"
@@ -102,6 +103,7 @@ func (h *Handler) GetByID(c *gin.Context) {
 // @Description Get a list of all users
 // @Tags Users
 // @Accept json
+// @Security BearerAuth
 // @Produce json
 // @Success 200 {object} response.APIResponse
 // @Failure 500 {object} response.APIResponse
@@ -123,6 +125,7 @@ func (h *Handler) List(c *gin.Context) {
 // @Summary Update User
 // @Description Update user details by ID
 // @Tags Users
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param id path string true "User ID"
@@ -173,6 +176,7 @@ func (h *Handler) Update(c *gin.Context) {
 // @Summary Delete User
 // @Description Delete user by ID
 // @Tags Users
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param id path string true "User ID"

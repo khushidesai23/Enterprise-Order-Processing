@@ -15,6 +15,89 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/auth/login": {
+            "post": {
+                "description": "Authenticate user and generate JWT token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Login",
+                "parameters": [
+                    {
+                        "description": "Login Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_modules_auth.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get currently authenticated user",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Current User",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/categories": {
             "get": {
                 "description": "Get all categories",
@@ -44,6 +127,11 @@ const docTemplate = `{
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Create a new category",
                 "consumes": [
                     "application/json"
@@ -132,6 +220,11 @@ const docTemplate = `{
                 }
             },
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Update category details by ID",
                 "consumes": [
                     "application/json"
@@ -183,6 +276,11 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Delete category by ID",
                 "consumes": [
                     "application/json"
@@ -227,6 +325,11 @@ const docTemplate = `{
         },
         "/inventory": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Get all inventory records",
                 "consumes": [
                     "application/json"
@@ -254,6 +357,11 @@ const docTemplate = `{
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Create a new inventory record",
                 "consumes": [
                     "application/json"
@@ -306,6 +414,11 @@ const docTemplate = `{
         },
         "/inventory/{productId}": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Get inventory details by product ID",
                 "consumes": [
                     "application/json"
@@ -348,6 +461,11 @@ const docTemplate = `{
                 }
             },
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Update inventory details by product ID",
                 "consumes": [
                     "application/json"
@@ -401,6 +519,11 @@ const docTemplate = `{
         },
         "/inventory/{productId}/add-stock": {
             "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Add stock to inventory by product ID",
                 "consumes": [
                     "application/json"
@@ -454,6 +577,11 @@ const docTemplate = `{
         },
         "/inventory/{productId}/confirm": {
             "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Confirm reserved stock in inventory by product ID",
                 "consumes": [
                     "application/json"
@@ -507,6 +635,11 @@ const docTemplate = `{
         },
         "/inventory/{productId}/release": {
             "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Release reserved stock in inventory by product ID",
                 "consumes": [
                     "application/json"
@@ -560,6 +693,11 @@ const docTemplate = `{
         },
         "/inventory/{productId}/remove-stock": {
             "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Remove stock from inventory by product ID",
                 "consumes": [
                     "application/json"
@@ -613,6 +751,11 @@ const docTemplate = `{
         },
         "/inventory/{productId}/reserve": {
             "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Reserve stock in inventory by product ID",
                 "consumes": [
                     "application/json"
@@ -666,6 +809,11 @@ const docTemplate = `{
         },
         "/orders": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Get all orders",
                 "consumes": [
                     "application/json"
@@ -693,6 +841,11 @@ const docTemplate = `{
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Create a new order",
                 "consumes": [
                     "application/json"
@@ -737,9 +890,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/orders/user/{userId}": {
+        "/orders/me": {
             "get": {
-                "description": "Get all orders for a specific user by user ID",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get all orders for the authenticated user",
                 "consumes": [
                     "application/json"
                 ],
@@ -749,16 +907,7 @@ const docTemplate = `{
                 "tags": [
                     "Orders"
                 ],
-                "summary": "Get Orders by User ID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "User ID",
-                        "name": "userId",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
+                "summary": "Get Orders by Authenticated User",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -766,8 +915,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
                         }
                     },
-                    "400": {
-                        "description": "Bad Request",
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
                         }
@@ -783,6 +932,11 @@ const docTemplate = `{
         },
         "/orders/{id}": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Get order details by ID",
                 "consumes": [
                     "application/json"
@@ -827,6 +981,11 @@ const docTemplate = `{
         },
         "/orders/{id}/cancel": {
             "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Cancel an order by ID",
                 "consumes": [
                     "application/json"
@@ -871,6 +1030,11 @@ const docTemplate = `{
         },
         "/orders/{id}/status": {
             "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Update the status of an order by ID",
                 "consumes": [
                     "application/json"
@@ -924,6 +1088,11 @@ const docTemplate = `{
         },
         "/payments": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Get all payments",
                 "consumes": [
                     "application/json"
@@ -951,6 +1120,11 @@ const docTemplate = `{
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Create a new payment for an order",
                 "consumes": [
                     "application/json"
@@ -997,6 +1171,11 @@ const docTemplate = `{
         },
         "/payments/order/{orderId}": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Get a payment by order ID",
                 "consumes": [
                     "application/json"
@@ -1041,6 +1220,11 @@ const docTemplate = `{
         },
         "/payments/summary": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Get a summary of payments",
                 "consumes": [
                     "application/json"
@@ -1122,6 +1306,11 @@ const docTemplate = `{
         },
         "/payments/{id}": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Get a payment by ID",
                 "consumes": [
                     "application/json"
@@ -1166,6 +1355,11 @@ const docTemplate = `{
         },
         "/payments/{id}/refund": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Refund a payment by ID",
                 "consumes": [
                     "application/json"
@@ -1243,6 +1437,11 @@ const docTemplate = `{
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Create a new product",
                 "consumes": [
                     "application/json"
@@ -1381,6 +1580,11 @@ const docTemplate = `{
                 }
             },
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Update product details by ID",
                 "consumes": [
                     "application/json"
@@ -1432,6 +1636,11 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Delete product by ID",
                 "consumes": [
                     "application/json"
@@ -1476,6 +1685,11 @@ const docTemplate = `{
         },
         "/users": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Get a list of all users",
                 "consumes": [
                     "application/json"
@@ -1549,6 +1763,11 @@ const docTemplate = `{
         },
         "/users/{id}": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Get user details by ID",
                 "consumes": [
                     "application/json"
@@ -1585,6 +1804,11 @@ const docTemplate = `{
                 }
             },
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Update user details by ID",
                 "consumes": [
                     "application/json"
@@ -1636,6 +1860,11 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Delete user by ID",
                 "consumes": [
                     "application/json"
@@ -1712,6 +1941,21 @@ const docTemplate = `{
                 "OrderDelivered",
                 "OrderCancelled"
             ]
+        },
+        "internal_modules_auth.LoginRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "password"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                }
+            }
         },
         "internal_modules_category.CreateCategoryRequest": {
             "type": "object",
@@ -1804,8 +2048,7 @@ const docTemplate = `{
         "internal_modules_order.CreateOrderRequest": {
             "type": "object",
             "required": [
-                "items",
-                "user_id"
+                "items"
             ],
             "properties": {
                 "items": {
@@ -1814,9 +2057,6 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/internal_modules_order.CreateOrderItemRequest"
                     }
-                },
-                "user_id": {
-                    "type": "string"
                 }
             }
         },
@@ -1851,6 +2091,9 @@ const docTemplate = `{
                         "type": "integer",
                         "format": "int32"
                     }
+                },
+                "eventID": {
+                    "type": "string"
                 },
                 "signature": {
                     "type": "string"
@@ -1958,6 +2201,13 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
         }
     }
 }`
