@@ -1,78 +1,92 @@
 # Enterprise Order Processing System
 
-A production-inspired **Order Processing System** built with **Golang**, following **Clean Architecture**, **SOLID principles**, and enterprise backend development practices.
+A production-inspired **Enterprise Order Processing System** built with **Go (Golang)** following **Clean Architecture**, **SOLID principles**, and enterprise backend development practices.
 
-The project simulates a real-world e-commerce order lifecycle, including inventory reservation, payment processing, webhook handling, and transactional consistency.
+The project simulates a complete e-commerce order lifecycle, including inventory reservation, payment processing with **Razorpay**, webhook handling, JWT authentication, and transactional consistency.
 
 ---
 
-## Features
+# Features
 
-### User Management
-- User registration
-- Authentication-ready architecture
-- Profile management
-- Input validation
+## Authentication
 
-### Product Management
-- Product CRUD operations
-- Category management
-- Product pricing
-- Product availability
+* JWT-based authentication
+* Secure login
+* Protected API routes
+* Swagger Bearer authentication support
 
-### Inventory Management
-- Stock reservation
-- Stock confirmation
-- Stock release
-- Inventory tracking
-- Transaction-safe inventory operations
+## User Management
 
-### Order Management
-- Order creation
-- Multi-item orders
-- Order status management
-- Order lifecycle validation
-- Inventory reservation during checkout
+* User registration
+* User CRUD operations
+* Password hashing using bcrypt
+* Input validation
 
-### Payment Module
-- Payment creation
-- Payment status tracking
-- Razorpay integration
-- Secure webhook verification
-- Idempotent webhook processing
-- Payment failure handling
-- Refund-ready architecture
+## Category Management
 
-### Reliability
-- ACID-compliant transactions
-- Repository pattern
-- Service layer architecture
-- Idempotent webhook processing
-- Optimistic business workflow
-- Proper error handling
+* Category CRUD operations
+
+## Product Management
+
+* Product CRUD operations
+* Category mapping
+* Product availability management
+
+## Inventory Management
+
+* Inventory CRUD operations
+* Stock reservation
+* Stock confirmation
+* Stock release
+* Transaction-safe inventory updates
+
+## Order Management
+
+* Multi-item order creation
+* Order lifecycle management
+* Automatic inventory reservation
+* Order cancellation
+* Order status validation
+
+## Payment Module
+
+* Razorpay Order creation
+* Razorpay Checkout integration
+* Checkout signature verification
+* Secure webhook verification
+* Idempotent webhook processing
+* Payment status synchronization
+* Automatic order status update after successful payment
+* Refund-ready architecture
+
+## API Documentation
+
+* Swagger UI integration
+* Interactive API testing
+* JWT Authorization support
 
 ---
 
 # Tech Stack
 
-| Category | Technology |
-|-----------|------------|
-| Language | Go |
-| Web Framework | Gin |
-| ORM | GORM |
-| Database | PostgreSQL |
-| Payment Gateway | Razorpay |
-| Configuration | Viper |
-| Logging | zap |
-| Authentication | JWT (Planned) |
-| API Style | REST |
-| Architecture | Clean Architecture |
+| Category        | Technology         |
+| --------------- | ------------------ |
+| Language        | Go                 |
+| Framework       | Gin                |
+| ORM             | GORM               |
+| Database        | PostgreSQL         |
+| Authentication  | JWT                |
+| Payment Gateway | Razorpay           |
+| Configuration   | Viper              |
+| Logging         | Zap                |
+| Documentation   | Swagger (Swaggo)   |
+| API             | REST               |
 
 ---
 
 # Project Structure
 
-```
+```text
 .
 ├── cmd/
 │   └── server/
@@ -80,167 +94,148 @@ The project simulates a real-world e-commerce order lifecycle, including invento
 │
 ├── config/
 │
+├── docs/
+│
 ├── internal/
+│   ├── api/
+│   ├── database/
 │   ├── models/
 │   ├── repository/
-│   ├── middleware/
-│   ├── routes/
-│   ├── handlers/
-│   ├── payment/
-│   ├── order/
-│   ├── inventory/
-│   ├── product/
-│   ├── category/
-│   └── user/
+│   └── modules/
+│       ├── auth/
+│       ├── user/
+│       ├── category/
+│       ├── product/
+│       ├── inventory/
+│       ├── order/
+│       └── payment/
 │
 ├── pkg/
 │
-├── docs/
-│
-├── scripts/
-│
-└── migrations/
+└── README.md
 ```
 
 ---
 
 # Architecture
 
-```
-               Client
-                  │
-                  ▼
-           REST API (Gin)
-                  │
-                  ▼
-            Route Handlers
-                  │
-                  ▼
-              Services
-                  │
-                  ▼
-          Repository Layer
-                  │
-                  ▼
-             PostgreSQL
+```text
+                Client
+                   │
+                   ▼
+            Gin HTTP Router
+                   │
+                   ▼
+        JWT Authentication Middleware
+                   │
+                   ▼
+              Route Handlers
+                   │
+                   ▼
+                Services
+                   │
+                   ▼
+             Repository Layer
+                   │
+                   ▼
+               PostgreSQL
 ```
 
 ---
 
 # Order Lifecycle
 
-```
-Created
-   │
-   ▼
-Payment Pending
-   │
-   ▼
-Paid
-   │
-   ▼
-Packed
-   │
-   ▼
-Shipped
-   │
-   ▼
-Delivered
+```text
+     Created
+        │
+        ▼
+ Payment Pending
+        │
+        ▼
+      Paid
+        │
+        ▼
+      Packed
+        │
+        ▼
+     Shipped
+        │
+        ▼
+    Delivered
 ```
 
-Cancellation can occur before shipment.
+Orders can be cancelled before shipment.
 
 ---
 
 # Payment Flow
 
-```
-Create Order
-      │
-      ▼
-Reserve Inventory
-      │
-      ▼
-Create Payment
-      │
-      ▼
-Razorpay Order Created
-      │
-      ▼
-Customer Pays
-      │
-      ▼
-Webhook Received
-      │
-      ▼
-Verify Signature
-      │
-      ▼
-Persist Webhook
-      │
-      ▼
-Update Payment
-      │
-      ▼
-Update Order
-      │
-      ▼
-Commit Transaction
+```text
+  Create Order
+        │
+        ▼
+  Reserve Inventory
+        │
+        ▼
+  Create Razorpay Order
+        │
+        ▼
+  Customer Completes Payment
+        │
+        ▼
+  Verify Checkout Signature
+        │
+        ▼
+  Receive Razorpay Webhook
+        │
+        ▼
+  Verify Webhook Signature
+        │
+        ▼
+  Persist Webhook
+        │
+        ▼
+  Update Payment Status
+        │
+        ▼
+  Update Order Status
+        │
+        ▼
+  Commit Transaction
 ```
 
 ---
 
-# Inventory Lifecycle
+# Inventory Flow
 
-```
-Initial
-
+```text
 Available = 100
 Reserved  = 0
-
 ↓
-
 Order Created
 
 Available = 98
 Reserved  = 2
-
 ↓
-
 Payment Pending
 
 Available = 98
 Reserved  = 2
-
 ↓
-
-Paid
+Payment Successful
 
 Available = 98
 Reserved  = 2
-
 ↓
-
-Packed
-
-Available = 98
-Reserved  = 2
-
-↓
-
-Shipped
+Order Shipped
 
 Available = 98
 Reserved  = 0
-
-↓
-
-Delivered
 ```
 
-If payment fails or the order is cancelled before shipment:
+If an order is cancelled before shipment:
 
-```
+```text
 Available += Reserved Quantity
 Reserved = 0
 ```
@@ -249,37 +244,37 @@ Reserved = 0
 
 # Business Rules
 
-- Inventory is reserved immediately after order creation.
-- Available inventory decreases during reservation.
-- Reserved inventory is confirmed when the order is shipped.
-- Cancelled orders release reserved inventory.
-- Duplicate webhook deliveries are ignored.
-- Payment processing is idempotent.
-- Order state transitions are validated.
-- Database operations are transaction-safe.
+* Inventory is reserved immediately after order creation.
+* Reserved inventory is confirmed when the order is shipped.
+* Cancelled orders release reserved inventory.
+* Payment processing is idempotent.
+* Duplicate webhook deliveries are ignored.
+* Razorpay webhook signatures are verified.
+* Checkout signatures are verified before accepting successful payments.
+* Order status transitions are validated.
+* All critical database operations are transaction-safe.
 
 ---
 
 # API Modules
 
-- User
-- Category
-- Product
-- Inventory
-- Order
-- Payment
+* Authentication
+* User
+* Category
+* Product
+* Inventory
+* Order
+* Payment
 
 ---
 
 # Running the Project
 
-## Clone
+## Clone Repository
 
 ```bash
 git clone https://github.com/<your-username>/Enterprise-Order-Processing.git
-```
 
-```bash
 cd Enterprise-Order-Processing
 ```
 
@@ -309,9 +304,12 @@ DB_PASSWORD=password
 DB_NAME=order_processing
 DB_SSLMODE=disable
 
-RAZORPAY_KEY_ID=
-RAZORPAY_KEY_SECRET=
-RAZORPAY_WEBHOOK_SECRET=
+JWT_SECRET=your-secret-key
+JWT_EXPIRATION=24h
+
+RAZORPAY_KEY_ID=rzp_test_xxxxxxxxx
+RAZORPAY_KEY_SECRET=xxxxxxxxxxxxxxxx
+RAZORPAY_WEBHOOK_SECRET=xxxxxxxxxxxxxxxx
 ```
 
 ---
@@ -322,77 +320,110 @@ Ensure PostgreSQL is running.
 
 ---
 
-## Run
+## Run the Application
 
 ```bash
-go run cmd/server/main.go
+go run ./cmd/server
 ```
 
 ---
 
-# Future Enhancements
+# Swagger API Documentation
 
-- JWT Authentication
-- Role-Based Access Control (RBAC)
-- Redis Caching
-- Background Job Processing
-- Event-Driven Architecture
-- Kafka Integration
-- Outbox Pattern
-- CDC with Debezium
-- Prometheus Metrics
-- Grafana Dashboards
-- OpenTelemetry Tracing
-- Docker Support
-- Kubernetes Deployment
-- CI/CD Pipeline
-- Notification Service
-- Email Service
-- Inventory Alerts
-- Multi-Warehouse Support
-- Distributed Transactions
-- Saga Pattern
-- Payment Retry Mechanism
+Generate Swagger files:
+
+```bash
+swag init -g ./cmd/server/main.go --parseInternal --parseDependency
+```
+
+Open Swagger UI:
+
+```text
+http://localhost:8080/swagger/index.html
+```
+
+Login using `/auth/login`, copy the JWT, click **Authorize**, and enter:
+
+```text
+Bearer <your-jwt-token>
+```
 
 ---
 
-# Learning Objectives
+# Razorpay Setup
 
-This project demonstrates practical implementation of:
+1. Create a Razorpay Test Account.
+2. Generate Test API Keys.
+3. Add the keys to the `.env` file.
+4. Configure a Webhook in the Razorpay Dashboard.
 
-- Clean Architecture
-- SOLID Principles
-- Repository Pattern
-- Dependency Injection
-- Transaction Management
-- Inventory Reservation Strategy
-- Payment Gateway Integration
-- Webhook Processing
-- Idempotent APIs
-- Enterprise Backend Design
-- PostgreSQL with GORM
-- REST API Development
-- Service-Oriented Design
+Webhook URL:
 
----
+```text
+https://<your-ngrok-url>/api/v1/payments/webhook
+```
 
-# Contributing
+Events to subscribe:
 
-Contributions, suggestions, and improvements are welcome.
+* payment.captured
+* payment.failed
+* refund.created
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Open a Pull Request
+Copy the generated **Webhook Secret** into:
+
+```env
+RAZORPAY_WEBHOOK_SECRET=xxxxxxxxxxxxxxxx
+```
 
 ---
 
-## Author
+# Local Webhook Testing with ngrok
+
+Since Razorpay cannot send webhooks to `localhost`, expose your local server using ngrok.
+
+Start ngrok:
+
+```bash
+ngrok http 8080
+```
+
+Example:
+
+```text
+https://abcd-1234.ngrok-free.app
+```
+
+Configure Razorpay Webhook:
+
+```text
+https://abcd-1234.ngrok-free.app/api/v1/payments/webhook
+```
+
+---
+
+# Payment Testing Flow
+
+1. Register/Login
+2. Copy JWT from `/auth/login`
+3. Authorize in Swagger
+4. Create User (if needed)
+5. Create Product
+6. Create Inventory
+7. Create Order
+8. Create Payment
+9. Complete Razorpay Checkout
+10. Razorpay sends Webhook
+11. Payment status updates automatically
+12. Order status changes to **PAID**
+
+---
+
+# Author
 
 **Khushi Desai**
 
 Associate Software Engineer | Cloud & Backend Development
 
-GitHub: https://github.com/khushidesai23
+**GitHub:** https://github.com/khushidesai23
 
-LinkedIn: [https://www.linkedin.com/in/khushidesai23/](https://www.linkedin.com/in/khushi-desai-ab5154225/)
+**LinkedIn:** https://www.linkedin.com/in/khushi-desai-ab5154225/
