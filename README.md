@@ -418,6 +418,22 @@ https://abcd-1234.ngrok-free.app/api/v1/payments/webhook
 
 ---
 
+# Demo Frontend
+
+A simple HTML + JavaScript demo frontend is included to test the complete payment flow.
+
+### Usage
+
+1. Start the backend server.
+2. Open `payment-demo/index.html` in your browser.
+3. Login using a registered user's credentials.
+4. Enter an Order ID and click **Pay Now**.
+5. Complete the payment using Razorpay Test Mode.
+6. If ngrok and the Razorpay webhook are configured, the payment and order status will be updated automatically.
+
+> **Note:** The demo frontend is intended for local development and testing only.
+---
+
 # Author
 
 **Khushi Desai**
