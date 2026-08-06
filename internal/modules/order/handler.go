@@ -41,6 +41,22 @@ func (h *Handler) CreateOrder(c *gin.Context) {
 		return
 	}
 
+	userID := c.GetString("user_id")
+
+	id, err := uuid.Parse(userID)
+	if err != nil {
+
+		response.Error(
+			c,
+			http.StatusUnauthorized,
+			"invalid authenticated user",
+		)
+
+		return
+	}
+
+	req.UserID = id
+
 	order, err := h.service.CreateOrder(
 		context.Background(),
 		req,
@@ -129,46 +145,61 @@ func (h *Handler) GetOrders(c *gin.Context) {
 	response.OK(c, "orders retrieved successfully", orders)
 }
 
-// GET /orders/user/:userId
-// @Summary Get Orders by User ID
-// @Description Get all orders for a specific user by user ID
+// GET /orders/me
+// @Summary Get Orders by Authenticated User
+// @Description Get all orders for the authenticated user
 // @Tags Orders
 // @Security BearerAuth
 // @Accept json
 // @Produce json
-// @Param userId path string true "User ID"
 // @Success 200 {object} response.APIResponse
-// @Failure 400 {object} response.APIResponse
+// @Failure 401 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
-// @Router /orders/user/{userId} [get]
+// @Router /orders/me [get]
 func (h *Handler) GetOrdersByUser(c *gin.Context) {
 
-	userID, err := uuid.Parse(c.Param("userId"))
+	userID := c.GetString("user_id")
+
+	id, err := uuid.Parse(userID)
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, "invalid user id")
+		response.Error(
+			c,
+			http.StatusUnauthorized,
+			"invalid authenticated user",
+		)
 		return
 	}
 
 	orders, err := h.service.GetOrdersByUser(
 		context.Background(),
-		userID,
+		id,
 	)
 
 	if err != nil {
-
 		switch {
-
 		case errors.Is(err, ErrUserNotFound):
-			response.Error(c, http.StatusNotFound, err.Error())
+			response.Error(
+				c,
+				http.StatusNotFound,
+				err.Error(),
+			)
 			return
 
 		default:
-			response.Error(c, http.StatusInternalServerError, err.Error())
+			response.Error(
+				c,
+				http.StatusInternalServerError,
+				err.Error(),
+			)
 			return
 		}
 	}
 
-	response.OK(c, "orders retrieved successfully", orders)
+	response.OK(
+		c,
+		"orders retrieved successfully",
+		orders,
+	)
 }
 
 // PATCH /orders/:id/status
