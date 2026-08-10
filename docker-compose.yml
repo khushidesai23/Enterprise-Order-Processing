@@ -1,12 +1,7 @@
-version: "3.9"
-
 services:
-
   postgres:
     image: postgres:16
-
     container_name: order-postgres
-
     restart: unless-stopped
 
     environment:
@@ -26,6 +21,31 @@ services:
       timeout: 5s
       retries: 5
 
-volumes:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: order-jaeger
+    restart: unless-stopped
 
+    ports:
+      - "16686:16686"
+
+  otel-collector:
+    image: otel/opentelemetry-collector:latest
+    container_name: order-otel-collector
+    restart: unless-stopped
+
+    command:
+      - "--config=/etc/otelcol/config.yaml"
+
+    volumes:
+      - ./config/collector-config.yaml:/etc/otelcol/config.yaml:ro
+
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+
+    depends_on:
+      - jaeger
+
+volumes:
   postgres_data:
