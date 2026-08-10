@@ -22,6 +22,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
+
 	"github.com/khushidesai23/Enterprise-Order-Processing/config"
 	_ "github.com/khushidesai23/Enterprise-Order-Processing/docs"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/handlers"
@@ -37,15 +39,44 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/user"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
+	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/telemetry"
 )
 
 func main() {
+
+	ctx := context.Background()
 
 	// Load Configuration
 	cfg, err := config.Load()
 	if err != nil {
 		panic(err)
 	}
+
+	// Initialize OpenTelemetry
+	otelShutdown, err := telemetry.InitTracer(
+		ctx,
+		cfg.OTelServiceName,
+		cfg.OTelServiceVersion,
+		cfg.OTelEnvironment,
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(
+			context.Background(),
+			10*time.Second,
+		)
+		defer cancel()
+
+		if err := otelShutdown(shutdownCtx); err != nil {
+			fmt.Printf(
+				"failed to shutdown OpenTelemetry: %v\n",
+				err,
+			)
+		}
+	}()
 
 	//Initialize JWT Manager
 	jwtManager := auth.NewJWTManager(
@@ -141,10 +172,13 @@ func main() {
 
 	// Router
 	router := gin.New()
-
 	router.Use(gin.Recovery())
+	router.Use(
+		otelgin.Middleware(
+			cfg.OTelServiceName,
+		),
+	)
 	router.Use(middleware.RequestLogger(log))
-
 	router.Use(middleware.CORS())
 
 	routes.Register(
