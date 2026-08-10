@@ -32,6 +32,11 @@ type Config struct {
 	JWTExpiration time.Duration
 
 	LogLevel string
+
+	OTelServiceName      string
+	OTelServiceVersion   string
+	OTelEnvironment      string
+	OTelExporterEndpoint string
 }
 
 func Load() (*Config, error) {
@@ -65,6 +70,11 @@ func Load() (*Config, error) {
 		),
 
 		LogLevel: viper.GetString("LOG_LEVEL"),
+
+		OTelServiceName:      viper.GetString("OTEL_SERVICE_NAME"),
+		OTelServiceVersion:   viper.GetString("OTEL_SERVICE_VERSION"),
+		OTelEnvironment:      viper.GetString("OTEL_ENVIRONMENT"),
+		OTelExporterEndpoint: viper.GetString("OTEL_EXPORTER_OTLP_ENDPOINT"),
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -94,6 +104,26 @@ func setDefaults() {
 	viper.SetDefault("JWT_EXPIRATION", 24*time.Hour)
 
 	viper.SetDefault("LOG_LEVEL", "debug")
+
+	viper.SetDefault(
+		"OTEL_SERVICE_NAME",
+		"enterprise-order-processing",
+	)
+
+	viper.SetDefault(
+		"OTEL_SERVICE_VERSION",
+		"1.0.0",
+	)
+
+	viper.SetDefault(
+		"OTEL_ENVIRONMENT",
+		"development",
+	)
+
+	viper.SetDefault(
+		"OTEL_EXPORTER_OTLP_ENDPOINT",
+		"localhost:4317",
+	)
 }
 
 func (c *Config) Validate() error {
