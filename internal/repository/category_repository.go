@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"errors"
 
 	"github.com/google/uuid"
@@ -20,22 +21,34 @@ func NewCategoryRepository(db *gorm.DB) *CategoryRepository {
 }
 
 // Create creates a new category.
-func (r *CategoryRepository) Create(category *models.Category) error {
-	return r.db.Create(category).Error
+func (r *CategoryRepository) Create(
+	ctx context.Context,
+	category *models.Category,
+) error {
+
+	return r.db.WithContext(ctx).
+		Create(category).
+		Error
 }
 
 // GetByID returns a category by ID.
-func (r *CategoryRepository) GetByID(id uuid.UUID) (*models.Category, error) {
+func (r *CategoryRepository) GetByID(
+	ctx context.Context,
+	id uuid.UUID,
+) (*models.Category, error) {
+
 	var category models.Category
 
-	err := r.db.
+	err := r.db.WithContext(ctx).
 		Preload("Products").
-		First(&category, "id = ?", id).Error
+		First(&category, "id = ?", id).
+		Error
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
 		}
+
 		return nil, err
 	}
 
@@ -43,18 +56,24 @@ func (r *CategoryRepository) GetByID(id uuid.UUID) (*models.Category, error) {
 }
 
 // GetByName returns a category by name.
-func (r *CategoryRepository) GetByName(name string) (*models.Category, error) {
+func (r *CategoryRepository) GetByName(
+	ctx context.Context,
+	name string,
+) (*models.Category, error) {
+
 	var category models.Category
 
-	err := r.db.
+	err := r.db.WithContext(ctx).
 		Preload("Products").
 		Where("name = ?", name).
-		First(&category).Error
+		First(&category).
+		Error
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
 		}
+
 		return nil, err
 	}
 
@@ -62,13 +81,17 @@ func (r *CategoryRepository) GetByName(name string) (*models.Category, error) {
 }
 
 // GetAll returns all categories.
-func (r *CategoryRepository) GetAll() ([]models.Category, error) {
+func (r *CategoryRepository) GetAll(
+	ctx context.Context,
+) ([]models.Category, error) {
+
 	var categories []models.Category
 
-	err := r.db.
+	err := r.db.WithContext(ctx).
 		Preload("Products").
 		Order("name ASC").
-		Find(&categories).Error
+		Find(&categories).
+		Error
 
 	if err != nil {
 		return nil, err
@@ -78,13 +101,18 @@ func (r *CategoryRepository) GetAll() ([]models.Category, error) {
 }
 
 // ExistsByName checks if a category name already exists.
-func (r *CategoryRepository) ExistsByName(name string) (bool, error) {
+func (r *CategoryRepository) ExistsByName(
+	ctx context.Context,
+	name string,
+) (bool, error) {
+
 	var count int64
 
-	err := r.db.
+	err := r.db.WithContext(ctx).
 		Model(&models.Category{}).
 		Where("LOWER(name) = LOWER(?)", name).
-		Count(&count).Error
+		Count(&count).
+		Error
 
 	if err != nil {
 		return false, err
@@ -95,13 +123,23 @@ func (r *CategoryRepository) ExistsByName(name string) (bool, error) {
 
 // ExistsByNameExceptID checks whether another category already
 // exists with the given name.
-func (r *CategoryRepository) ExistsByNameExceptID(id uuid.UUID, name string) (bool, error) {
+func (r *CategoryRepository) ExistsByNameExceptID(
+	ctx context.Context,
+	id uuid.UUID,
+	name string,
+) (bool, error) {
+
 	var count int64
 
-	err := r.db.
+	err := r.db.WithContext(ctx).
 		Model(&models.Category{}).
-		Where("LOWER(name) = LOWER(?) AND id <> ?", name, id).
-		Count(&count).Error
+		Where(
+			"LOWER(name) = LOWER(?) AND id <> ?",
+			name,
+			id,
+		).
+		Count(&count).
+		Error
 
 	if err != nil {
 		return false, err
@@ -112,13 +150,18 @@ func (r *CategoryRepository) ExistsByNameExceptID(id uuid.UUID, name string) (bo
 
 // HasProducts returns true if the category is associated
 // with one or more products.
-func (r *CategoryRepository) HasProducts(id uuid.UUID) (bool, error) {
+func (r *CategoryRepository) HasProducts(
+	ctx context.Context,
+	id uuid.UUID,
+) (bool, error) {
+
 	var count int64
 
-	err := r.db.
+	err := r.db.WithContext(ctx).
 		Model(&models.Product{}).
 		Where("category_id = ?", id).
-		Count(&count).Error
+		Count(&count).
+		Error
 
 	if err != nil {
 		return false, err
@@ -128,11 +171,23 @@ func (r *CategoryRepository) HasProducts(id uuid.UUID) (bool, error) {
 }
 
 // Update updates a category.
-func (r *CategoryRepository) Update(category *models.Category) error {
-	return r.db.Save(category).Error
+func (r *CategoryRepository) Update(
+	ctx context.Context,
+	category *models.Category,
+) error {
+
+	return r.db.WithContext(ctx).
+		Save(category).
+		Error
 }
 
 // Delete soft deletes a category.
-func (r *CategoryRepository) Delete(category *models.Category) error {
-	return r.db.Delete(category).Error
+func (r *CategoryRepository) Delete(
+	ctx context.Context,
+	category *models.Category,
+) error {
+
+	return r.db.WithContext(ctx).
+		Delete(category).
+		Error
 }
