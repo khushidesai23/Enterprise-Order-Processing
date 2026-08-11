@@ -1,6 +1,7 @@
 package product
 
 import (
+	"context"
 	"errors"
 
 	"github.com/google/uuid"
@@ -22,10 +23,16 @@ func NewService(
 }
 
 // CreateProduct creates a new product.
-func (s *Service) CreateProduct(req CreateProductRequest) (*ProductResponse, error) {
+func (s *Service) CreateProduct(
+	ctx context.Context,
+	req CreateProductRequest,
+) (*ProductResponse, error) {
 
 	// Check Category
-	exists, err := s.productRepository.CategoryExists(req.CategoryID)
+	exists, err := s.productRepository.CategoryExists(
+		ctx,
+		req.CategoryID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +42,10 @@ func (s *Service) CreateProduct(req CreateProductRequest) (*ProductResponse, err
 	}
 
 	// Check SKU
-	exists, err = s.productRepository.ExistsBySKU(req.SKU)
+	exists, err = s.productRepository.ExistsBySKU(
+		ctx,
+		req.SKU,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -46,11 +56,17 @@ func (s *Service) CreateProduct(req CreateProductRequest) (*ProductResponse, err
 
 	product := ToProductModel(req)
 
-	if err := s.productRepository.Create(product); err != nil {
+	if err := s.productRepository.Create(
+		ctx,
+		product,
+	); err != nil {
 		return nil, err
 	}
 
-	product, err = s.productRepository.GetByID(product.ID)
+	product, err = s.productRepository.GetByID(
+		ctx,
+		product.ID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -61,9 +77,15 @@ func (s *Service) CreateProduct(req CreateProductRequest) (*ProductResponse, err
 }
 
 // GetProduct returns a product by ID.
-func (s *Service) GetProduct(id uuid.UUID) (*ProductResponse, error) {
+func (s *Service) GetProduct(
+	ctx context.Context,
+	id uuid.UUID,
+) (*ProductResponse, error) {
 
-	product, err := s.productRepository.GetByID(id)
+	product, err := s.productRepository.GetByID(
+		ctx,
+		id,
+	)
 	if err != nil {
 
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -79,9 +101,13 @@ func (s *Service) GetProduct(id uuid.UUID) (*ProductResponse, error) {
 }
 
 // GetProducts returns all products.
-func (s *Service) GetProducts() ([]ProductListResponse, error) {
+func (s *Service) GetProducts(
+	ctx context.Context,
+) ([]ProductListResponse, error) {
 
-	products, err := s.productRepository.GetAll()
+	products, err := s.productRepository.GetAll(
+		ctx,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -90,9 +116,15 @@ func (s *Service) GetProducts() ([]ProductListResponse, error) {
 }
 
 // GetProductsByCategory returns products of a category.
-func (s *Service) GetProductsByCategory(categoryID uuid.UUID) ([]ProductListResponse, error) {
+func (s *Service) GetProductsByCategory(
+	ctx context.Context,
+	categoryID uuid.UUID,
+) ([]ProductListResponse, error) {
 
-	exists, err := s.productRepository.CategoryExists(categoryID)
+	exists, err := s.productRepository.CategoryExists(
+		ctx,
+		categoryID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +133,10 @@ func (s *Service) GetProductsByCategory(categoryID uuid.UUID) ([]ProductListResp
 		return nil, ErrCategoryNotFound
 	}
 
-	products, err := s.productRepository.GetByCategory(categoryID)
+	products, err := s.productRepository.GetByCategory(
+		ctx,
+		categoryID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -111,11 +146,15 @@ func (s *Service) GetProductsByCategory(categoryID uuid.UUID) ([]ProductListResp
 
 // UpdateProduct updates an existing product.
 func (s *Service) UpdateProduct(
+	ctx context.Context,
 	id uuid.UUID,
 	req UpdateProductRequest,
 ) (*ProductResponse, error) {
 
-	product, err := s.productRepository.GetByID(id)
+	product, err := s.productRepository.GetByID(
+		ctx,
+		id,
+	)
 	if err != nil {
 
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -125,7 +164,10 @@ func (s *Service) UpdateProduct(
 		return nil, err
 	}
 
-	exists, err := s.productRepository.CategoryExists(req.CategoryID)
+	exists, err := s.productRepository.CategoryExists(
+		ctx,
+		req.CategoryID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +176,11 @@ func (s *Service) UpdateProduct(
 		return nil, ErrCategoryNotFound
 	}
 
-	exists, err = s.productRepository.ExistsBySKUExceptID(id, req.SKU)
+	exists, err = s.productRepository.ExistsBySKUExceptID(
+		ctx,
+		id,
+		req.SKU,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -145,11 +191,17 @@ func (s *Service) UpdateProduct(
 
 	UpdateProductModel(product, req)
 
-	if err := s.productRepository.Update(product); err != nil {
+	if err := s.productRepository.Update(
+		ctx,
+		product,
+	); err != nil {
 		return nil, err
 	}
 
-	product, err = s.productRepository.GetByID(product.ID)
+	product, err = s.productRepository.GetByID(
+		ctx,
+		product.ID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -160,9 +212,15 @@ func (s *Service) UpdateProduct(
 }
 
 // DeleteProduct soft deletes a product.
-func (s *Service) DeleteProduct(id uuid.UUID) error {
+func (s *Service) DeleteProduct(
+	ctx context.Context,
+	id uuid.UUID,
+) error {
 
-	product, err := s.productRepository.GetByID(id)
+	product, err := s.productRepository.GetByID(
+		ctx,
+		id,
+	)
 	if err != nil {
 
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -172,5 +230,8 @@ func (s *Service) DeleteProduct(id uuid.UUID) error {
 		return err
 	}
 
-	return s.productRepository.Delete(product)
+	return s.productRepository.Delete(
+		ctx,
+		product,
+	)
 }
