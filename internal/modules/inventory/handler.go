@@ -1,11 +1,13 @@
 package inventory
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/response"
 )
 
@@ -36,32 +38,51 @@ func (h *Handler) CreateInventory(c *gin.Context) {
 	var req CreateInventoryRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, http.StatusBadRequest, err.Error())
+		response.Error(
+			c,
+			http.StatusBadRequest,
+			err.Error(),
+		)
 		return
 	}
 
-	inventory, err := h.service.CreateInventory(req)
+	inventory, err := h.service.CreateInventory(
+		c.Request.Context(),
+		req,
+	)
 	if err != nil {
 
 		switch {
 		case errors.Is(err, ErrProductNotFound):
-			response.Error(c, http.StatusNotFound, err.Error())
+			response.Error(
+				c,
+				http.StatusNotFound,
+				err.Error(),
+			)
 			return
 
 		case errors.Is(err, ErrInventoryAlreadyExists):
-			response.Error(c, http.StatusConflict, err.Error())
-			return
-
-		case errors.Is(err, ErrInventoryAlreadyExists):
-			response.Error(c, http.StatusConflict, err.Error())
+			response.Error(
+				c,
+				http.StatusConflict,
+				err.Error(),
+			)
 			return
 		}
 
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(
+			c,
+			http.StatusInternalServerError,
+			err.Error(),
+		)
 		return
 	}
 
-	response.Created(c, "inventory created successfully", inventory)
+	response.Created(
+		c,
+		"inventory created successfully",
+		inventory,
+	)
 }
 
 // GET /inventory
@@ -76,13 +97,24 @@ func (h *Handler) CreateInventory(c *gin.Context) {
 // @Router /inventory [get]
 func (h *Handler) GetInventories(c *gin.Context) {
 
-	inventories, err := h.service.GetInventories()
+	inventories, err := h.service.GetInventories(
+		c.Request.Context(),
+	)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(
+			c,
+			http.StatusInternalServerError,
+			err.Error(),
+		)
 		return
 	}
 
-	response.Success(c, http.StatusOK, "inventories retrieved successfully", inventories)
+	response.Success(
+		c,
+		http.StatusOK,
+		"inventories retrieved successfully",
+		inventories,
+	)
 }
 
 // GET /inventory/:productId
@@ -99,26 +131,47 @@ func (h *Handler) GetInventories(c *gin.Context) {
 // @Router /inventory/{productId} [get]
 func (h *Handler) GetInventory(c *gin.Context) {
 
-	productID, err := uuid.Parse(c.Param("productId"))
+	productID, err := uuid.Parse(
+		c.Param("productId"),
+	)
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, ErrInvalidInventoryID.Error())
+		response.Error(
+			c,
+			http.StatusBadRequest,
+			ErrInvalidInventoryID.Error(),
+		)
 		return
 	}
 
-	inventory, err := h.service.GetInventory(productID)
+	inventory, err := h.service.GetInventory(
+		c.Request.Context(),
+		productID,
+	)
 	if err != nil {
 
 		switch {
 		case errors.Is(err, ErrInventoryNotFound):
-			response.Error(c, http.StatusNotFound, err.Error())
+			response.Error(
+				c,
+				http.StatusNotFound,
+				err.Error(),
+			)
 			return
 		}
 
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(
+			c,
+			http.StatusInternalServerError,
+			err.Error(),
+		)
 		return
 	}
 
-	response.OK(c, "inventory retrieved successfully", inventory)
+	response.OK(
+		c,
+		"inventory retrieved successfully",
+		inventory,
+	)
 }
 
 // PUT /inventory/:productId
@@ -136,38 +189,68 @@ func (h *Handler) GetInventory(c *gin.Context) {
 // @Router /inventory/{productId} [put]
 func (h *Handler) UpdateInventory(c *gin.Context) {
 
-	productID, err := uuid.Parse(c.Param("productId"))
+	productID, err := uuid.Parse(
+		c.Param("productId"),
+	)
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, ErrInvalidInventoryID.Error())
+		response.Error(
+			c,
+			http.StatusBadRequest,
+			ErrInvalidInventoryID.Error(),
+		)
 		return
 	}
 
 	var req UpdateInventoryRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, http.StatusBadRequest, err.Error())
+		response.Error(
+			c,
+			http.StatusBadRequest,
+			err.Error(),
+		)
 		return
 	}
 
-	inventory, err := h.service.UpdateInventory(productID, req)
+	inventory, err := h.service.UpdateInventory(
+		c.Request.Context(),
+		productID,
+		req,
+	)
 	if err != nil {
 
 		switch {
 
 		case errors.Is(err, ErrInventoryNotFound):
-			response.Error(c, http.StatusNotFound, err.Error())
+			response.Error(
+				c,
+				http.StatusNotFound,
+				err.Error(),
+			)
 			return
 
 		case errors.Is(err, ErrNegativeStock):
-			response.Error(c, http.StatusBadRequest, err.Error())
+			response.Error(
+				c,
+				http.StatusBadRequest,
+				err.Error(),
+			)
 			return
 		}
 
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(
+			c,
+			http.StatusInternalServerError,
+			err.Error(),
+		)
 		return
 	}
 
-	response.OK(c, "inventory updated successfully", inventory)
+	response.OK(
+		c,
+		"inventory updated successfully",
+		inventory,
+	)
 }
 
 // PATCH /inventory/:productId/add-stock
@@ -185,7 +268,10 @@ func (h *Handler) UpdateInventory(c *gin.Context) {
 // @Router /inventory/{productId}/add-stock [patch]
 func (h *Handler) AddStock(c *gin.Context) {
 
-	h.handleStockOperation(c, h.service.AddStock)
+	h.handleStockOperation(
+		c,
+		h.service.AddStock,
+	)
 }
 
 // PATCH /inventory/:productId/remove-stock
@@ -203,7 +289,10 @@ func (h *Handler) AddStock(c *gin.Context) {
 // @Router /inventory/{productId}/remove-stock [patch]
 func (h *Handler) RemoveStock(c *gin.Context) {
 
-	h.handleStockOperation(c, h.service.RemoveStock)
+	h.handleStockOperation(
+		c,
+		h.service.RemoveStock,
+	)
 }
 
 // PATCH /inventory/:productId/reserve
@@ -214,14 +303,16 @@ func (h *Handler) RemoveStock(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param productId path string true "Product ID"
-// @Param request body StockOperationRequest true "Stock Operation"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
 // @Router /inventory/{productId}/reserve [patch]
 func (h *Handler) ReserveStock(c *gin.Context) {
 
-	h.handleStockOperation(c, h.service.ReserveStock)
+	h.handleStockOperation(
+		c,
+		h.service.ReserveStock,
+	)
 }
 
 // PATCH /inventory/:productId/release
@@ -232,14 +323,16 @@ func (h *Handler) ReserveStock(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param productId path string true "Product ID"
-// @Param request body StockOperationRequest true "Stock Operation"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
 // @Router /inventory/{productId}/release [patch]
 func (h *Handler) ReleaseReservedStock(c *gin.Context) {
 
-	h.handleStockOperation(c, h.service.ReleaseReservedStock)
+	h.handleStockOperation(
+		c,
+		h.service.ReleaseReservedStock,
+	)
 }
 
 // PATCH /inventory/:productId/confirm
@@ -250,54 +343,95 @@ func (h *Handler) ReleaseReservedStock(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param productId path string true "Product ID"
-// @Param request body StockOperationRequest true "Stock Operation"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
 // @Router /inventory/{productId}/confirm [patch]
 func (h *Handler) ConfirmReservedStock(c *gin.Context) {
 
-	h.handleStockOperation(c, h.service.ConfirmReservedStock)
+	h.handleStockOperation(
+		c,
+		h.service.ConfirmReservedStock,
+	)
 }
 
-// handleStockOperation is a helper method to handle stock operations like add, remove, reserve, release, and confirm.
+// handleStockOperation handles stock operations such as
+// add, remove, reserve, release, and confirm.
 func (h *Handler) handleStockOperation(
 	c *gin.Context,
-	operation func(uuid.UUID, int) (*InventoryResponse, error),
+	operation func(
+		context.Context,
+		uuid.UUID,
+		int,
+	) (*InventoryResponse, error),
 ) {
-	productID, err := uuid.Parse(c.Param("productId"))
+
+	productID, err := uuid.Parse(
+		c.Param("productId"),
+	)
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, ErrInvalidInventoryID.Error())
+		response.Error(
+			c,
+			http.StatusBadRequest,
+			ErrInvalidInventoryID.Error(),
+		)
 		return
 	}
 
 	var req StockOperationRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, http.StatusBadRequest, err.Error())
+		response.Error(
+			c,
+			http.StatusBadRequest,
+			err.Error(),
+		)
 		return
 	}
 
-	inventory, err := operation(productID, req.Quantity)
+	inventory, err := operation(
+		c.Request.Context(),
+		productID,
+		req.Quantity,
+	)
 	if err != nil {
 
 		switch {
 
 		case errors.Is(err, ErrInventoryNotFound):
-			response.Error(c, http.StatusNotFound, err.Error())
+			response.Error(
+				c,
+				http.StatusNotFound,
+				err.Error(),
+			)
 			return
 
 		case errors.Is(err, ErrInvalidQuantity),
 			errors.Is(err, ErrInsufficientStock),
 			errors.Is(err, ErrInsufficientReserved),
 			errors.Is(err, ErrNegativeStock):
-			response.Error(c, http.StatusBadRequest, err.Error())
+
+			response.Error(
+				c,
+				http.StatusBadRequest,
+				err.Error(),
+			)
 			return
 
 		default:
-			response.Error(c, http.StatusInternalServerError, err.Error())
+			response.Error(
+				c,
+				http.StatusInternalServerError,
+				err.Error(),
+			)
 		}
+
 		return
 	}
-	response.OK(c, "stock operation completed successfully", inventory)
+
+	response.OK(
+		c,
+		"stock operation completed successfully",
+		inventory,
+	)
 }
