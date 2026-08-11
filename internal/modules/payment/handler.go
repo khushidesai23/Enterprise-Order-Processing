@@ -90,7 +90,7 @@ func (h *Handler) GetPayment(c *gin.Context) {
 		return
 	}
 
-	paymentResp, err := h.service.GetPayment(id)
+	paymentResp, err := h.service.GetPayment(c.Request.Context(), id)
 	if err != nil {
 
 		switch {
@@ -117,7 +117,7 @@ func (h *Handler) GetPayment(c *gin.Context) {
 // @Router /payments [get]
 func (h *Handler) GetPayments(c *gin.Context) {
 
-	paymentsResp, err := h.service.GetPayments()
+	paymentsResp, err := h.service.GetPayments(c.Request.Context())
 	if err != nil {
 
 		response.Error(c, http.StatusInternalServerError, err.Error())
@@ -146,7 +146,7 @@ func (h *Handler) GetPaymentByOrder(c *gin.Context) {
 		return
 	}
 
-	paymentResp, err := h.service.GetPaymentByOrder(orderID)
+	paymentResp, err := h.service.GetPaymentByOrder(c.Request.Context(), orderID)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrOrderNotFound),
@@ -175,7 +175,7 @@ func (h *Handler) GetPaymentByOrder(c *gin.Context) {
 // @Router /payments/summary [get]
 func (h *Handler) GetPaymentSummary(c *gin.Context) {
 
-	paymentSummaryResp, err := h.service.GetPaymentSummary()
+	paymentSummaryResp, err := h.service.GetPaymentSummary(c.Request.Context())
 
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
@@ -273,7 +273,7 @@ func (h *Handler) RefundPayment(c *gin.Context) {
 		return
 	}
 
-	refundResp, err := h.service.RefundPayment(id)
+	refundResp, err := h.service.RefundPayment(c.Request.Context(), id)
 	if err != nil {
 
 		switch {

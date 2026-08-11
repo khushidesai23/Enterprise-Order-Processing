@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -22,24 +23,33 @@ func NewPaymentWebhookRepository(
 	}
 }
 
-// Create
+// Create creates a new payment webhook record inside a transaction.
 func (r *PaymentWebhookRepository) Create(
+	ctx context.Context,
 	tx *gorm.DB,
 	webhook *models.PaymentWebhook,
 ) error {
 
-	return tx.Create(webhook).Error
+	return tx.
+		WithContext(ctx).
+		Create(webhook).
+		Error
 }
 
-// Get
+// GetByPayloadID returns a webhook by its payload ID.
 func (r *PaymentWebhookRepository) GetByPayloadID(
+	ctx context.Context,
 	payloadID string,
 ) (*models.PaymentWebhook, error) {
 
 	var webhook models.PaymentWebhook
 
 	err := r.db.
-		Where("payload_id = ?", payloadID).
+		WithContext(ctx).
+		Where(
+			"payload_id = ?",
+			payloadID,
+		).
 		First(&webhook).
 		Error
 
@@ -55,16 +65,21 @@ func (r *PaymentWebhookRepository) GetByPayloadID(
 	return &webhook, nil
 }
 
-// Mark Processed
+// MarkProcessed marks a webhook as successfully processed.
 func (r *PaymentWebhookRepository) MarkProcessed(
+	ctx context.Context,
 	tx *gorm.DB,
 	payloadID string,
 	processedAt time.Time,
 ) error {
 
 	return tx.
+		WithContext(ctx).
 		Model(&models.PaymentWebhook{}).
-		Where("payload_id = ?", payloadID).
+		Where(
+			"payload_id = ?",
+			payloadID,
+		).
 		Updates(map[string]interface{}{
 			"status":       models.WebhookProcessed,
 			"processed_at": processedAt,
@@ -72,16 +87,21 @@ func (r *PaymentWebhookRepository) MarkProcessed(
 		Error
 }
 
-// Mark Failed
+// MarkFailed marks a webhook as failed.
 func (r *PaymentWebhookRepository) MarkFailed(
+	ctx context.Context,
 	tx *gorm.DB,
 	payloadID string,
 	processedAt time.Time,
 ) error {
 
 	return tx.
+		WithContext(ctx).
 		Model(&models.PaymentWebhook{}).
-		Where("payload_id = ?", payloadID).
+		Where(
+			"payload_id = ?",
+			payloadID,
+		).
 		Updates(map[string]interface{}{
 			"status":       models.WebhookFailed,
 			"processed_at": processedAt,
