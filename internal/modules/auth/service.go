@@ -4,30 +4,33 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/config"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
+	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
 type Service struct {
 	userRepository repository.UserRepository
-
-	jwt *JWTManager
-
-	config *config.Config
+	jwt            *JWTManager
+	config         *config.Config
+	log            *zap.Logger
 }
 
 func NewService(
 	userRepository repository.UserRepository,
 	jwtManager *JWTManager,
 	config *config.Config,
+	log *zap.Logger,
 ) *Service {
 
 	return &Service{
 		userRepository: userRepository,
 		jwt:            jwtManager,
 		config:         config,
+		log:            log,
 	}
 }
 
@@ -41,10 +44,24 @@ func (s *Service) Login(
 		req.Email,
 	)
 	if err != nil {
+		logger.WarnContext(
+			ctx,
+			s.log,
+			"user login failed",
+			zap.String("email", req.Email),
+		)
+
 		return nil, ErrInvalidCredentials
 	}
 
 	if !user.IsActive {
+		logger.WarnContext(
+			ctx,
+			s.log,
+			"login attempt for inactive user",
+			zap.String("user_id", user.ID.String()),
+		)
+
 		return nil, ErrInactiveUser
 	}
 
@@ -52,6 +69,13 @@ func (s *Service) Login(
 		[]byte(user.Password),
 		[]byte(req.Password),
 	) != nil {
+		logger.WarnContext(
+			ctx,
+			s.log,
+			"user login failed",
+			zap.String("user_id", user.ID.String()),
+		)
+
 		return nil, ErrInvalidCredentials
 	}
 
@@ -62,6 +86,13 @@ func (s *Service) Login(
 	if err != nil {
 		return nil, err
 	}
+
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"user login successful",
+		zap.String("user_id", user.ID.String()),
+	)
 
 	return &LoginResponse{
 		Token: token,

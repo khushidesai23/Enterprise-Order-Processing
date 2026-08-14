@@ -85,9 +85,9 @@ func main() {
 	)
 
 	// Logger
-	log, err := logger.New(cfg.LogLevel)
-	if err != nil {
-		panic(err)
+	log := logger.New()
+	if log == nil {
+		panic("failed to initialize logger")
 	}
 
 	defer func() {
@@ -129,27 +129,27 @@ func main() {
 	healthHandler := handlers.NewHealthHandler(cfg, db)
 
 	userRepository := repository.NewUserRepository(db.DB)
-	userService := user.NewService(userRepository)
+	userService := user.NewService(userRepository, log)
 	userHandler := user.NewHandler(userService)
 
-	authService := auth.NewService(userRepository, jwtManager, cfg)
+	authService := auth.NewService(userRepository, jwtManager, cfg, log)
 	authHandler := auth.NewHandler(authService)
 
 	productRepository := repository.NewProductRepository(db.DB)
-	productService := product.NewService(productRepository)
+	productService := product.NewService(productRepository, log)
 	productHandler := product.NewHandler(productService)
 
 	categoryRepository := repository.NewCategoryRepository(db.DB)
-	categoryService := category.NewService(categoryRepository)
+	categoryService := category.NewService(categoryRepository, log)
 	categoryHandler := category.NewHandler(categoryService)
 
 	inventoryRepository := repository.NewInventoryRepository(db.DB)
-	inventoryService := inventory.NewService(inventoryRepository, productRepository)
+	inventoryService := inventory.NewService(inventoryRepository, productRepository, log)
 	inventoryHandler := inventory.NewHandler(inventoryService)
 
 	orderRepository := repository.NewOrderRepository(db.DB)
 	orderItemRepository := repository.NewOrderItemRepository(db.DB)
-	orderService := order.NewService(orderRepository, orderItemRepository, userRepository, productRepository, inventoryRepository)
+	orderService := order.NewService(orderRepository, orderItemRepository, userRepository, productRepository, inventoryRepository, log)
 	orderHandler := order.NewHandler(orderService)
 
 	paymentRepository := repository.NewPaymentRepository(db.DB)
@@ -167,6 +167,7 @@ func main() {
 		orderService,
 		gateway,
 		cfg.RazorpayKeyID,
+		log,
 	)
 	paymentHandler := payment.NewHandler(paymentService)
 

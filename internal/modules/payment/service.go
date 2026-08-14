@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
 	ordermodule "github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/order"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
+	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
 type Service struct {
@@ -20,6 +22,7 @@ type Service struct {
 	orderService      *ordermodule.Service
 	gateway           PaymentGateway
 	keyID             string
+	log               *zap.Logger
 }
 
 func NewService(
@@ -28,6 +31,7 @@ func NewService(
 	orderService *ordermodule.Service,
 	gateway PaymentGateway,
 	keyID string,
+	log *zap.Logger,
 ) *Service {
 
 	return &Service{
@@ -36,6 +40,7 @@ func NewService(
 		orderService:      orderService,
 		gateway:           gateway,
 		keyID:             keyID,
+		log:               log,
 	}
 }
 
@@ -154,6 +159,15 @@ func (s *Service) CreatePayment(
 		s.keyID,
 	)
 
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"payment created",
+		zap.String("payment_id", payment.ID.String()),
+		zap.String("order_id", payment.OrderID.String()),
+		zap.String("status", string(payment.Status)),
+	)
+
 	return &response, nil
 }
 
@@ -263,7 +277,13 @@ func (s *Service) ProcessWebhook(
 		return err
 	}
 
-	println("Event ID:", req.EventID)
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"payment webhook received",
+		zap.String("event_id", req.EventID),
+		zap.String("event", webhook.EventName()),
+	)
 
 	status, err := webhook.PaymentStatus()
 	if err != nil {
@@ -363,6 +383,17 @@ func (s *Service) ProcessWebhook(
 		return err
 	}
 
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"payment webhook processed",
+		zap.String("event_id", req.EventID),
+		zap.String("event", webhook.EventName()),
+		zap.String("payment_id", payment.ID.String()),
+		zap.String("order_id", payment.OrderID.String()),
+		zap.String("status", string(status)),
+	)
+
 	return nil
 }
 
@@ -439,6 +470,15 @@ func (s *Service) RefundPayment(
 		return nil, err
 	}
 
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"payment refunded",
+		zap.String("payment_id", payment.ID.String()),
+		zap.String("order_id", payment.OrderID.String()),
+		zap.String("status", string(payment.Status)),
+	)
+
 	response := ToPaymentResponse(payment)
 
 	return &response, nil
@@ -473,6 +513,15 @@ func (s *Service) applyWebhookPaymentStatus(
 			return err
 		}
 
+		logger.InfoContext(
+			ctx,
+			s.log,
+			"payment completed",
+			zap.String("payment_id", payment.ID.String()),
+			zap.String("order_id", payment.OrderID.String()),
+			zap.String("transaction_id", stringValue(transactionID)),
+		)
+
 		return mapOrderError(
 			s.orderService.MarkOrderPaid(
 				tx,
@@ -496,6 +545,15 @@ func (s *Service) applyWebhookPaymentStatus(
 			return err
 		}
 
+		logger.WarnContext(
+			ctx,
+			s.log,
+			"payment failed",
+			zap.String("payment_id", payment.ID.String()),
+			zap.String("order_id", payment.OrderID.String()),
+			zap.String("transaction_id", stringValue(transactionID)),
+		)
+
 		return mapOrderError(
 			s.orderService.CancelOrderByPaymentFailure(
 				tx,
@@ -517,6 +575,14 @@ func (s *Service) applyWebhookPaymentStatus(
 		); err != nil {
 			return err
 		}
+
+		logger.InfoContext(
+			ctx,
+			s.log,
+			"payment marked refunded",
+			zap.String("payment_id", payment.ID.String()),
+			zap.String("order_id", payment.OrderID.String()),
+		)
 
 		return mapOrderError(
 			s.orderService.RefundOrder(
@@ -576,4 +642,12 @@ func rollbackOnPanic(tx *gorm.DB) {
 		tx.Rollback()
 		panic(r)
 	}
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+
+	return *value
 }

@@ -5,20 +5,21 @@ import (
 	"errors"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
+	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
 type Service struct {
 	orderRepository     *repository.OrderRepository
 	orderItemRepository *repository.OrderItemRepository
-
-	userRepository repository.UserRepository
-
+	userRepository      repository.UserRepository
 	productRepository   *repository.ProductRepository
 	inventoryRepository *repository.InventoryRepository
+	log                 *zap.Logger
 }
 
 var ErrInsufficientReserved = errors.New("insufficient reserved inventory")
@@ -29,6 +30,7 @@ func NewService(
 	userRepository repository.UserRepository,
 	productRepository *repository.ProductRepository,
 	inventoryRepository *repository.InventoryRepository,
+	log *zap.Logger,
 ) *Service {
 
 	return &Service{
@@ -37,6 +39,7 @@ func NewService(
 		userRepository:      userRepository,
 		productRepository:   productRepository,
 		inventoryRepository: inventoryRepository,
+		log:                 log,
 	}
 }
 
@@ -372,6 +375,15 @@ func (s *Service) UpdateOrderStatus(
 
 	response := ToOrderResponse(order)
 
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"order created",
+		zap.String("order_id", order.ID.String()),
+		zap.String("user_id", order.UserID.String()),
+		zap.Float64("total_amount", order.TotalAmount),
+	)
+
 	return &response, nil
 }
 
@@ -620,12 +632,25 @@ func (s *Service) transitionOrder(
 		}
 	}
 
-	return s.orderRepository.UpdateStatusTx(
+	if err := s.orderRepository.UpdateStatusTx(
 		ctx,
 		tx,
 		order.ID,
 		next,
+	); err != nil {
+		return err
+	}
+
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"order status updated",
+		zap.String("order_id", order.ID.String()),
+		zap.String("from_status", string(order.Status)),
+		zap.String("to_status", string(next)),
 	)
+
+	return nil
 }
 
 func (s *Service) cancelOrderTx(
@@ -695,6 +720,15 @@ func (s *Service) confirmReservedInventory(
 		); err != nil {
 			return err
 		}
+
+		logger.InfoContext(
+			ctx,
+			s.log,
+			"reserved inventory confirmed",
+			zap.String("order_id", order.ID.String()),
+			zap.String("product_id", item.ProductID.String()),
+			zap.Int("quantity", item.Quantity),
+		)
 	}
 
 	return nil
@@ -734,6 +768,15 @@ func (s *Service) releaseReservedInventory(
 		); err != nil {
 			return err
 		}
+
+		logger.InfoContext(
+			ctx,
+			s.log,
+			"reserved inventory released",
+			zap.String("order_id", order.ID.String()),
+			zap.String("product_id", item.ProductID.String()),
+			zap.Int("quantity", item.Quantity),
+		)
 	}
 
 	return nil
