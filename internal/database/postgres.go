@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm/logger"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/config"
+	"github.com/uptrace/opentelemetry-go-extra/otelgorm"
 )
 
 type Database struct {
@@ -18,11 +19,23 @@ type Database struct {
 func New(cfg *config.Config) (*Database, error) {
 
 	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: logger.Default.LogMode(logger.Error),
 	})
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect database: %w", err)
+	}
+
+	if err := db.Use(
+		otelgorm.NewPlugin(
+			otelgorm.WithDBName(cfg.DBName),
+			otelgorm.WithoutQueryVariables(),
+		),
+	); err != nil {
+		return nil, fmt.Errorf(
+			"failed to initialize GORM OpenTelemetry instrumentation: %w",
+			err,
+		)
 	}
 
 	sqlDB, err := db.DB()

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"errors"
 
 	"github.com/google/uuid"
@@ -20,22 +21,38 @@ func NewInventoryRepository(db *gorm.DB) *InventoryRepository {
 }
 
 // Create creates inventory for a product.
-func (r *InventoryRepository) Create(inventory *models.Inventory) error {
-	return r.db.Create(inventory).Error
+func (r *InventoryRepository) Create(
+	ctx context.Context,
+	inventory *models.Inventory,
+) error {
+
+	return r.db.WithContext(ctx).
+		Create(inventory).
+		Error
 }
 
 // GetByProductID returns inventory by product id.
-func (r *InventoryRepository) GetByProductID(productID uuid.UUID) (*models.Inventory, error) {
+func (r *InventoryRepository) GetByProductID(
+	ctx context.Context,
+	productID uuid.UUID,
+) (*models.Inventory, error) {
+
 	var inventory models.Inventory
 
-	err := r.db.
+	err := r.db.WithContext(ctx).
 		Preload("Product").
-		First(&inventory, "product_id = ?", productID).Error
+		First(
+			&inventory,
+			"product_id = ?",
+			productID,
+		).
+		Error
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
 		}
+
 		return nil, err
 	}
 
@@ -44,20 +61,27 @@ func (r *InventoryRepository) GetByProductID(productID uuid.UUID) (*models.Inven
 
 // GetByProductIDTx returns inventory within a transaction.
 func (r *InventoryRepository) GetByProductIDTx(
+	ctx context.Context,
 	tx *gorm.DB,
 	productID uuid.UUID,
 ) (*models.Inventory, error) {
 
 	var inventory models.Inventory
 
-	err := tx.
+	err := tx.WithContext(ctx).
 		Preload("Product").
-		First(&inventory, "product_id = ?", productID).Error
+		First(
+			&inventory,
+			"product_id = ?",
+			productID,
+		).
+		Error
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
 		}
+
 		return nil, err
 	}
 
@@ -65,13 +89,17 @@ func (r *InventoryRepository) GetByProductIDTx(
 }
 
 // GetAll returns all inventories.
-func (r *InventoryRepository) GetAll() ([]models.Inventory, error) {
+func (r *InventoryRepository) GetAll(
+	ctx context.Context,
+) ([]models.Inventory, error) {
+
 	var inventories []models.Inventory
 
-	err := r.db.
+	err := r.db.WithContext(ctx).
 		Preload("Product").
 		Order("created_at DESC").
-		Find(&inventories).Error
+		Find(&inventories).
+		Error
 
 	if err != nil {
 		return nil, err
@@ -81,13 +109,18 @@ func (r *InventoryRepository) GetAll() ([]models.Inventory, error) {
 }
 
 // ExistsByProductID checks whether inventory already exists.
-func (r *InventoryRepository) ExistsByProductID(productID uuid.UUID) (bool, error) {
+func (r *InventoryRepository) ExistsByProductID(
+	ctx context.Context,
+	productID uuid.UUID,
+) (bool, error) {
+
 	var count int64
 
-	err := r.db.
+	err := r.db.WithContext(ctx).
 		Model(&models.Inventory{}).
 		Where("product_id = ?", productID).
-		Count(&count).Error
+		Count(&count).
+		Error
 
 	if err != nil {
 		return false, err
@@ -97,13 +130,18 @@ func (r *InventoryRepository) ExistsByProductID(productID uuid.UUID) (bool, erro
 }
 
 // ProductExists checks whether a product exists.
-func (r *InventoryRepository) ProductExists(productID uuid.UUID) (bool, error) {
+func (r *InventoryRepository) ProductExists(
+	ctx context.Context,
+	productID uuid.UUID,
+) (bool, error) {
+
 	var count int64
 
-	err := r.db.
+	err := r.db.WithContext(ctx).
 		Model(&models.Product{}).
 		Where("id = ?", productID).
-		Count(&count).Error
+		Count(&count).
+		Error
 
 	if err != nil {
 		return false, err
@@ -113,19 +151,30 @@ func (r *InventoryRepository) ProductExists(productID uuid.UUID) (bool, error) {
 }
 
 // Update updates inventory.
-func (r *InventoryRepository) Update(inv *models.Inventory) error {
-	return r.db.
+func (r *InventoryRepository) Update(
+	ctx context.Context,
+	inv *models.Inventory,
+) error {
+
+	return r.db.WithContext(ctx).
 		Model(&models.Inventory{}).
 		Where("product_id = ?", inv.ProductID).
 		Updates(map[string]interface{}{
 			"available_quantity": inv.AvailableQuantity,
 			"reserved_quantity":  inv.ReservedQuantity,
-		}).Error
+		}).
+		Error
 }
 
 // Delete deletes inventory.
-func (r *InventoryRepository) Delete(inventory *models.Inventory) error {
-	return r.db.Delete(inventory).Error
+func (r *InventoryRepository) Delete(
+	ctx context.Context,
+	inventory *models.Inventory,
+) error {
+
+	return r.db.WithContext(ctx).
+		Delete(inventory).
+		Error
 }
 
 //
@@ -133,115 +182,218 @@ func (r *InventoryRepository) Delete(inventory *models.Inventory) error {
 //
 
 // AddStock increases available stock.
-func (r *InventoryRepository) AddStock(productID uuid.UUID, quantity int) error {
-	return r.db.Model(&models.Inventory{}).
+func (r *InventoryRepository) AddStock(
+	ctx context.Context,
+	productID uuid.UUID,
+	quantity int,
+) error {
+
+	return r.db.WithContext(ctx).
+		Model(&models.Inventory{}).
 		Where("product_id = ?", productID).
-		UpdateColumn("available_quantity",
-			gorm.Expr("available_quantity + ?", quantity)).
+		UpdateColumn(
+			"available_quantity",
+			gorm.Expr(
+				"available_quantity + ?",
+				quantity,
+			),
+		).
 		Error
 }
 
 // AddStockTx increases available stock inside a transaction.
 func (r *InventoryRepository) AddStockTx(
+	ctx context.Context,
 	tx *gorm.DB,
 	productID uuid.UUID,
 	quantity int,
 ) error {
-	return tx.Model(&models.Inventory{}).
+
+	return tx.WithContext(ctx).
+		Model(&models.Inventory{}).
 		Where("product_id = ?", productID).
-		UpdateColumn("available_quantity",
-			gorm.Expr("available_quantity + ?", quantity)).
+		UpdateColumn(
+			"available_quantity",
+			gorm.Expr(
+				"available_quantity + ?",
+				quantity,
+			),
+		).
 		Error
 }
 
 // RemoveStock decreases available stock.
-func (r *InventoryRepository) RemoveStock(productID uuid.UUID, quantity int) error {
-	return r.db.Model(&models.Inventory{}).
+func (r *InventoryRepository) RemoveStock(
+	ctx context.Context,
+	productID uuid.UUID,
+	quantity int,
+) error {
+
+	return r.db.WithContext(ctx).
+		Model(&models.Inventory{}).
 		Where("product_id = ?", productID).
-		UpdateColumn("available_quantity",
-			gorm.Expr("available_quantity - ?", quantity)).
+		UpdateColumn(
+			"available_quantity",
+			gorm.Expr(
+				"available_quantity - ?",
+				quantity,
+			),
+		).
 		Error
 }
 
 // RemoveStockTx decreases available stock inside a transaction.
 func (r *InventoryRepository) RemoveStockTx(
+	ctx context.Context,
 	tx *gorm.DB,
 	productID uuid.UUID,
 	quantity int,
 ) error {
-	return tx.Model(&models.Inventory{}).
+
+	return tx.WithContext(ctx).
+		Model(&models.Inventory{}).
 		Where("product_id = ?", productID).
-		UpdateColumn("available_quantity",
-			gorm.Expr("available_quantity - ?", quantity)).
+		UpdateColumn(
+			"available_quantity",
+			gorm.Expr(
+				"available_quantity - ?",
+				quantity,
+			),
+		).
 		Error
 }
 
 // ReserveStock moves stock from available -> reserved.
-func (r *InventoryRepository) ReserveStock(productID uuid.UUID, quantity int) error {
-	return r.db.Model(&models.Inventory{}).
+func (r *InventoryRepository) ReserveStock(
+	ctx context.Context,
+	productID uuid.UUID,
+	quantity int,
+) error {
+
+	return r.db.WithContext(ctx).
+		Model(&models.Inventory{}).
 		Where("product_id = ?", productID).
 		Updates(map[string]interface{}{
-			"available_quantity": gorm.Expr("available_quantity - ?", quantity),
-			"reserved_quantity":  gorm.Expr("reserved_quantity + ?", quantity),
-		}).Error
+			"available_quantity": gorm.Expr(
+				"available_quantity - ?",
+				quantity,
+			),
+			"reserved_quantity": gorm.Expr(
+				"reserved_quantity + ?",
+				quantity,
+			),
+		}).
+		Error
 }
 
 // ReserveStockTx moves stock from available -> reserved inside a transaction.
 func (r *InventoryRepository) ReserveStockTx(
+	ctx context.Context,
 	tx *gorm.DB,
 	productID uuid.UUID,
 	quantity int,
 ) error {
-	return tx.Model(&models.Inventory{}).
+
+	return tx.WithContext(ctx).
+		Model(&models.Inventory{}).
 		Where("product_id = ?", productID).
 		Updates(map[string]interface{}{
-			"available_quantity": gorm.Expr("available_quantity - ?", quantity),
-			"reserved_quantity":  gorm.Expr("reserved_quantity + ?", quantity),
-		}).Error
+			"available_quantity": gorm.Expr(
+				"available_quantity - ?",
+				quantity,
+			),
+			"reserved_quantity": gorm.Expr(
+				"reserved_quantity + ?",
+				quantity,
+			),
+		}).
+		Error
 }
 
 // ReleaseReservedStock moves stock from reserved -> available.
-func (r *InventoryRepository) ReleaseReservedStock(productID uuid.UUID, quantity int) error {
-	return r.db.Model(&models.Inventory{}).
+func (r *InventoryRepository) ReleaseReservedStock(
+	ctx context.Context,
+	productID uuid.UUID,
+	quantity int,
+) error {
+
+	return r.db.WithContext(ctx).
+		Model(&models.Inventory{}).
 		Where("product_id = ?", productID).
 		Updates(map[string]interface{}{
-			"available_quantity": gorm.Expr("available_quantity + ?", quantity),
-			"reserved_quantity":  gorm.Expr("reserved_quantity - ?", quantity),
-		}).Error
+			"available_quantity": gorm.Expr(
+				"available_quantity + ?",
+				quantity,
+			),
+			"reserved_quantity": gorm.Expr(
+				"reserved_quantity - ?",
+				quantity,
+			),
+		}).
+		Error
 }
 
 // ReleaseReservedStockTx moves stock from reserved -> available inside a transaction.
 func (r *InventoryRepository) ReleaseReservedStockTx(
+	ctx context.Context,
 	tx *gorm.DB,
 	productID uuid.UUID,
 	quantity int,
 ) error {
-	return tx.Model(&models.Inventory{}).
+
+	return tx.WithContext(ctx).
+		Model(&models.Inventory{}).
 		Where("product_id = ?", productID).
 		Updates(map[string]interface{}{
-			"available_quantity": gorm.Expr("available_quantity + ?", quantity),
-			"reserved_quantity":  gorm.Expr("reserved_quantity - ?", quantity),
-		}).Error
+			"available_quantity": gorm.Expr(
+				"available_quantity + ?",
+				quantity,
+			),
+			"reserved_quantity": gorm.Expr(
+				"reserved_quantity - ?",
+				quantity,
+			),
+		}).
+		Error
 }
 
 // ConfirmReservedStock deducts reserved stock permanently.
-func (r *InventoryRepository) ConfirmReservedStock(productID uuid.UUID, quantity int) error {
-	return r.db.Model(&models.Inventory{}).
+func (r *InventoryRepository) ConfirmReservedStock(
+	ctx context.Context,
+	productID uuid.UUID,
+	quantity int,
+) error {
+
+	return r.db.WithContext(ctx).
+		Model(&models.Inventory{}).
 		Where("product_id = ?", productID).
-		UpdateColumn("reserved_quantity",
-			gorm.Expr("reserved_quantity - ?", quantity)).
+		UpdateColumn(
+			"reserved_quantity",
+			gorm.Expr(
+				"reserved_quantity - ?",
+				quantity,
+			),
+		).
 		Error
 }
 
 // ConfirmReservedStockTx deducts reserved stock permanently inside a transaction.
 func (r *InventoryRepository) ConfirmReservedStockTx(
+	ctx context.Context,
 	tx *gorm.DB,
 	productID uuid.UUID,
 	quantity int,
 ) error {
-	return tx.Model(&models.Inventory{}).
+
+	return tx.WithContext(ctx).
+		Model(&models.Inventory{}).
 		Where("product_id = ?", productID).
-		UpdateColumn("reserved_quantity",
-			gorm.Expr("reserved_quantity - ?", quantity)).
+		UpdateColumn(
+			"reserved_quantity",
+			gorm.Expr(
+				"reserved_quantity - ?",
+				quantity,
+			),
+		).
 		Error
 }

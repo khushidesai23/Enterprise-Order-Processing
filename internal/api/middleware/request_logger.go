@@ -5,6 +5,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+
+	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
 func RequestLogger(log *zap.Logger) gin.HandlerFunc {
@@ -16,6 +18,7 @@ func RequestLogger(log *zap.Logger) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		start := time.Now()
+
 		path := c.Request.URL.Path
 		rawQuery := c.Request.URL.RawQuery
 
@@ -34,22 +37,46 @@ func RequestLogger(log *zap.Logger) gin.HandlerFunc {
 		}
 
 		if rawQuery != "" {
-			fields = append(fields, zap.String("query", rawQuery))
+			fields = append(
+				fields,
+				zap.String("query", rawQuery),
+			)
 		}
 
-		if len(c.Errors) > 0 {
-			fields = append(fields, zap.String("errors", c.Errors.String()))
-			log.Error("http request", fields...)
-			return
-		}
+		ctx := c.Request.Context()
 
 		switch {
+		case len(c.Errors) > 0:
+			logger.ErrorContext(
+				ctx,
+				log,
+				"http request",
+				fields...,
+			)
+
 		case status >= 500:
-			log.Error("http request", fields...)
+			logger.ErrorContext(
+				ctx,
+				log,
+				"http request",
+				fields...,
+			)
+
 		case status >= 400:
-			log.Warn("http request", fields...)
+			logger.WarnContext(
+				ctx,
+				log,
+				"http request",
+				fields...,
+			)
+
 		default:
-			log.Info("http request", fields...)
+			logger.InfoContext(
+				ctx,
+				log,
+				"http request",
+				fields...,
+			)
 		}
 	}
 }

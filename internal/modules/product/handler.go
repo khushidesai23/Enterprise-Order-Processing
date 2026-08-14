@@ -40,7 +40,7 @@ func (h *Handler) CreateProduct(c *gin.Context) {
 		return
 	}
 
-	product, err := h.service.CreateProduct(req)
+	product, err := h.service.CreateProduct(c.Request.Context(), req)
 	if err != nil {
 
 		switch {
@@ -70,7 +70,7 @@ func (h *Handler) CreateProduct(c *gin.Context) {
 // @Router /products [get]
 func (h *Handler) GetProducts(c *gin.Context) {
 
-	products, err := h.service.GetProducts()
+	products, err := h.service.GetProducts(c.Request.Context())
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
@@ -98,7 +98,7 @@ func (h *Handler) GetProduct(c *gin.Context) {
 		return
 	}
 
-	product, err := h.service.GetProduct(id)
+	product, err := h.service.GetProduct(c.Request.Context(), id)
 	if err != nil {
 
 		switch {
@@ -133,7 +133,7 @@ func (h *Handler) GetProductsByCategory(c *gin.Context) {
 		return
 	}
 
-	products, err := h.service.GetProductsByCategory(categoryID)
+	products, err := h.service.GetProductsByCategory(c.Request.Context(), categoryID)
 	if err != nil {
 
 		switch {
@@ -177,7 +177,7 @@ func (h *Handler) UpdateProduct(c *gin.Context) {
 		return
 	}
 
-	product, err := h.service.UpdateProduct(id, req)
+	product, err := h.service.UpdateProduct(c.Request.Context(), id, req)
 	if err != nil {
 
 		switch {
@@ -222,7 +222,7 @@ func (h *Handler) DeleteProduct(c *gin.Context) {
 		return
 	}
 
-	err = h.service.DeleteProduct(id)
+	err = h.service.DeleteProduct(c.Request.Context(), id)
 	if err != nil {
 
 		switch {

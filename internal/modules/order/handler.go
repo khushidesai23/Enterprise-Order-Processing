@@ -1,7 +1,6 @@
 package order
 
 import (
-	"context"
 	"errors"
 	"net/http"
 
@@ -58,7 +57,7 @@ func (h *Handler) CreateOrder(c *gin.Context) {
 	req.UserID = id
 
 	order, err := h.service.CreateOrder(
-		context.Background(),
+		c.Request.Context(),
 		req,
 	)
 
@@ -105,7 +104,11 @@ func (h *Handler) GetOrder(c *gin.Context) {
 		return
 	}
 
-	order, err := h.service.GetOrder(id)
+	order, err := h.service.GetOrder(
+		c.Request.Context(),
+		id,
+	)
+
 	if err != nil {
 
 		switch {
@@ -135,7 +138,7 @@ func (h *Handler) GetOrder(c *gin.Context) {
 // @Router /orders [get]
 func (h *Handler) GetOrders(c *gin.Context) {
 
-	orders, err := h.service.GetOrders()
+	orders, err := h.service.GetOrders(c.Request.Context())
 	if err != nil {
 
 		response.Error(c, http.StatusInternalServerError, err.Error())
@@ -171,7 +174,7 @@ func (h *Handler) GetOrdersByUser(c *gin.Context) {
 	}
 
 	orders, err := h.service.GetOrdersByUser(
-		context.Background(),
+		c.Request.Context(),
 		id,
 	)
 
@@ -230,7 +233,11 @@ func (h *Handler) UpdateOrderStatus(c *gin.Context) {
 		return
 	}
 
-	order, err := h.service.UpdateOrderStatus(id, req)
+	order, err := h.service.UpdateOrderStatus(
+		c.Request.Context(),
+		id,
+		req,
+	)
 	if err != nil {
 
 		switch {
@@ -274,7 +281,10 @@ func (h *Handler) CancelOrder(c *gin.Context) {
 		return
 	}
 
-	order, err := h.service.CancelOrder(id)
+	order, err := h.service.CancelOrder(
+		c.Request.Context(),
+		id,
+	)
 	if err != nil {
 
 		switch {
