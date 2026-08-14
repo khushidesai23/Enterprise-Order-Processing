@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"errors"
 
 	"github.com/google/uuid"
@@ -20,27 +21,46 @@ func NewPaymentRepository(db *gorm.DB) *PaymentRepository {
 }
 
 // Transaction Support
-func (r *PaymentRepository) Begin() *gorm.DB {
-	return r.db.Begin()
+
+func (r *PaymentRepository) Begin(
+	ctx context.Context,
+) *gorm.DB {
+
+	return r.db.
+		WithContext(ctx).
+		Begin()
 }
 
 // Create
+
 func (r *PaymentRepository) Create(
+	ctx context.Context,
 	tx *gorm.DB,
 	payment *models.Payment,
 ) error {
-	return tx.Create(payment).Error
+
+	return tx.
+		WithContext(ctx).
+		Create(payment).
+		Error
 }
 
 // Read
+
 func (r *PaymentRepository) GetByID(
+	ctx context.Context,
 	id uuid.UUID,
 ) (*models.Payment, error) {
 
 	var payment models.Payment
 
 	err := r.db.
-		First(&payment, "id = ?", id).
+		WithContext(ctx).
+		First(
+			&payment,
+			"id = ?",
+			id,
+		).
 		Error
 
 	if err != nil {
@@ -56,6 +76,7 @@ func (r *PaymentRepository) GetByID(
 }
 
 func (r *PaymentRepository) GetByIDTx(
+	ctx context.Context,
 	tx *gorm.DB,
 	id uuid.UUID,
 ) (*models.Payment, error) {
@@ -63,7 +84,12 @@ func (r *PaymentRepository) GetByIDTx(
 	var payment models.Payment
 
 	err := tx.
-		First(&payment, "id = ?", id).
+		WithContext(ctx).
+		First(
+			&payment,
+			"id = ?",
+			id,
+		).
 		Error
 
 	if err != nil {
@@ -79,13 +105,18 @@ func (r *PaymentRepository) GetByIDTx(
 }
 
 func (r *PaymentRepository) GetByOrderID(
+	ctx context.Context,
 	orderID uuid.UUID,
 ) (*models.Payment, error) {
 
 	var payment models.Payment
 
 	err := r.db.
-		Where("order_id = ?", orderID).
+		WithContext(ctx).
+		Where(
+			"order_id = ?",
+			orderID,
+		).
 		First(&payment).
 		Error
 
@@ -102,6 +133,7 @@ func (r *PaymentRepository) GetByOrderID(
 }
 
 func (r *PaymentRepository) GetByOrderIDTx(
+	ctx context.Context,
 	tx *gorm.DB,
 	orderID uuid.UUID,
 ) (*models.Payment, error) {
@@ -109,7 +141,11 @@ func (r *PaymentRepository) GetByOrderIDTx(
 	var payment models.Payment
 
 	err := tx.
-		Where("order_id = ?", orderID).
+		WithContext(ctx).
+		Where(
+			"order_id = ?",
+			orderID,
+		).
 		First(&payment).
 		Error
 
@@ -126,13 +162,18 @@ func (r *PaymentRepository) GetByOrderIDTx(
 }
 
 func (r *PaymentRepository) GetByGatewayOrderID(
+	ctx context.Context,
 	gatewayOrderID string,
 ) (*models.Payment, error) {
 
 	var payment models.Payment
 
 	err := r.db.
-		Where("gateway_order_id = ?", gatewayOrderID).
+		WithContext(ctx).
+		Where(
+			"gateway_order_id = ?",
+			gatewayOrderID,
+		).
 		First(&payment).
 		Error
 
@@ -149,6 +190,7 @@ func (r *PaymentRepository) GetByGatewayOrderID(
 }
 
 func (r *PaymentRepository) GetByGatewayOrderIDTx(
+	ctx context.Context,
 	tx *gorm.DB,
 	gatewayOrderID string,
 ) (*models.Payment, error) {
@@ -156,7 +198,11 @@ func (r *PaymentRepository) GetByGatewayOrderIDTx(
 	var payment models.Payment
 
 	err := tx.
-		Where("gateway_order_id = ?", gatewayOrderID).
+		WithContext(ctx).
+		Where(
+			"gateway_order_id = ?",
+			gatewayOrderID,
+		).
 		First(&payment).
 		Error
 
@@ -173,13 +219,18 @@ func (r *PaymentRepository) GetByGatewayOrderIDTx(
 }
 
 func (r *PaymentRepository) GetByTransactionID(
+	ctx context.Context,
 	transactionID string,
 ) (*models.Payment, error) {
 
 	var payment models.Payment
 
 	err := r.db.
-		Where("transaction_id = ?", transactionID).
+		WithContext(ctx).
+		Where(
+			"transaction_id = ?",
+			transactionID,
+		).
 		First(&payment).
 		Error
 
@@ -195,11 +246,14 @@ func (r *PaymentRepository) GetByTransactionID(
 	return &payment, nil
 }
 
-func (r *PaymentRepository) GetAll() ([]models.Payment, error) {
+func (r *PaymentRepository) GetAll(
+	ctx context.Context,
+) ([]models.Payment, error) {
 
 	var payments []models.Payment
 
 	err := r.db.
+		WithContext(ctx).
 		Order("created_at DESC").
 		Find(&payments).
 		Error
@@ -212,46 +266,74 @@ func (r *PaymentRepository) GetAll() ([]models.Payment, error) {
 }
 
 // Update
+
 func (r *PaymentRepository) UpdateStatus(
+	ctx context.Context,
 	tx *gorm.DB,
 	id uuid.UUID,
 	status models.PaymentStatus,
 ) error {
 
 	return tx.
+		WithContext(ctx).
 		Model(&models.Payment{}).
-		Where("id = ?", id).
-		Update("status", status).
+		Where(
+			"id = ?",
+			id,
+		).
+		Update(
+			"status",
+			status,
+		).
 		Error
 }
 
 func (r *PaymentRepository) UpdateTransaction(
+	ctx context.Context,
 	tx *gorm.DB,
 	id uuid.UUID,
 	transactionID *string,
 ) error {
+
 	return tx.
+		WithContext(ctx).
 		Model(&models.Payment{}).
-		Where("id = ?", id).
-		Update("transaction_id", transactionID).
+		Where(
+			"id = ?",
+			id,
+		).
+		Update(
+			"transaction_id",
+			transactionID,
+		).
 		Error
 }
 
 func (r *PaymentRepository) UpdateGatewayOrder(
+	ctx context.Context,
 	tx *gorm.DB,
 	id uuid.UUID,
 	gatewayOrderID string,
 ) error {
 
 	return tx.
+		WithContext(ctx).
 		Model(&models.Payment{}).
-		Where("id = ?", id).
-		Update("gateway_order_id", gatewayOrderID).
+		Where(
+			"id = ?",
+			id,
+		).
+		Update(
+			"gateway_order_id",
+			gatewayOrderID,
+		).
 		Error
 }
 
 // Complete Payment
+
 func (r *PaymentRepository) CompletePayment(
+	ctx context.Context,
 	tx *gorm.DB,
 	id uuid.UUID,
 	transactionID *string,
@@ -259,8 +341,12 @@ func (r *PaymentRepository) CompletePayment(
 ) error {
 
 	return tx.
+		WithContext(ctx).
 		Model(&models.Payment{}).
-		Where("id = ?", id).
+		Where(
+			"id = ?",
+			id,
+		).
 		Updates(map[string]interface{}{
 			"transaction_id": transactionID,
 			"status":         status,
@@ -269,11 +355,18 @@ func (r *PaymentRepository) CompletePayment(
 }
 
 // Delete
+
 func (r *PaymentRepository) Delete(
+	ctx context.Context,
 	id uuid.UUID,
 ) error {
 
 	return r.db.
-		Delete(&models.Payment{}, "id = ?", id).
+		WithContext(ctx).
+		Delete(
+			&models.Payment{},
+			"id = ?",
+			id,
+		).
 		Error
 }
