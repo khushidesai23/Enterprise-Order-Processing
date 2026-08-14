@@ -4,8 +4,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
+
+	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
 func RequestLogger(log *zap.Logger) gin.HandlerFunc {
@@ -17,12 +18,10 @@ func RequestLogger(log *zap.Logger) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		start := time.Now()
+
 		path := c.Request.URL.Path
 		rawQuery := c.Request.URL.RawQuery
 
-		// Continue the request so that all downstream handlers,
-		// services, repositories, and GORM operations execute
-		// within the same OpenTelemetry context.
 		c.Next()
 
 		latency := time.Since(start)
@@ -37,25 +36,6 @@ func RequestLogger(log *zap.Logger) gin.HandlerFunc {
 			zap.Int("body_size", c.Writer.Size()),
 		}
 
-		// Add the current OpenTelemetry trace/span identifiers
-		// to the structured application log.
-		span := trace.SpanFromContext(c.Request.Context())
-		spanContext := span.SpanContext()
-
-		if spanContext.IsValid() {
-			fields = append(
-				fields,
-				zap.String(
-					"trace_id",
-					spanContext.TraceID().String(),
-				),
-				zap.String(
-					"span_id",
-					spanContext.SpanID().String(),
-				),
-			)
-		}
-
 		if rawQuery != "" {
 			fields = append(
 				fields,
@@ -63,35 +43,37 @@ func RequestLogger(log *zap.Logger) gin.HandlerFunc {
 			)
 		}
 
-		if len(c.Errors) > 0 {
-			fields = append(
-				fields,
-				zap.String("errors", c.Errors.String()),
-			)
+		ctx := c.Request.Context()
 
-			log.Error(
+		switch {
+		case len(c.Errors) > 0:
+			logger.ErrorContext(
+				ctx,
+				log,
 				"http request",
 				fields...,
 			)
 
-			return
-		}
-
-		switch {
 		case status >= 500:
-			log.Error(
+			logger.ErrorContext(
+				ctx,
+				log,
 				"http request",
 				fields...,
 			)
 
 		case status >= 400:
-			log.Warn(
+			logger.WarnContext(
+				ctx,
+				log,
 				"http request",
 				fields...,
 			)
 
 		default:
-			log.Info(
+			logger.InfoContext(
+				ctx,
+				log,
 				"http request",
 				fields...,
 			)
