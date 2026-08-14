@@ -5,23 +5,28 @@ import (
 	"errors"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
+	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
 type Service struct {
 	inventoryRepository *repository.InventoryRepository
 	productRepository   *repository.ProductRepository
+	log                 *zap.Logger
 }
 
 func NewService(
 	inventoryRepository *repository.InventoryRepository,
 	productRepository *repository.ProductRepository,
+	log *zap.Logger,
 ) *Service {
 	return &Service{
 		inventoryRepository: inventoryRepository,
 		productRepository:   productRepository,
+		log:                 log,
 	}
 }
 
@@ -75,6 +80,13 @@ func (s *Service) CreateInventory(
 	if err != nil {
 		return nil, err
 	}
+
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"inventory created",
+		zap.String("product_id", req.ProductID.String()),
+	)
 
 	response := ToInventoryResponse(inventory)
 
@@ -164,6 +176,13 @@ func (s *Service) UpdateInventory(
 	if err != nil {
 		return nil, err
 	}
+
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"inventory updated",
+		zap.String("product_id", productID.String()),
+	)
 
 	response := ToInventoryResponse(inventory)
 
@@ -308,6 +327,14 @@ func (s *Service) ReserveStock(
 		return nil, err
 	}
 
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"inventory stock reserved",
+		zap.String("product_id", productID.String()),
+		zap.Int("quantity", quantity),
+	)
+
 	response := ToInventoryResponse(inventory)
 
 	return &response, nil
@@ -356,6 +383,14 @@ func (s *Service) ReleaseReservedStock(
 	if err != nil {
 		return nil, err
 	}
+
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"inventory stock released",
+		zap.String("product_id", productID.String()),
+		zap.Int("quantity", quantity),
+	)
 
 	response := ToInventoryResponse(inventory)
 
@@ -406,6 +441,14 @@ func (s *Service) ConfirmReservedStock(
 	if err != nil {
 		return nil, err
 	}
+
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"inventory reserved stock confirmed",
+		zap.String("product_id", productID.String()),
+		zap.Int("quantity", quantity),
+	)
 
 	response := ToInventoryResponse(inventory)
 

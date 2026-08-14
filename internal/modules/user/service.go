@@ -6,9 +6,11 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
+	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/utils"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/validator"
 )
@@ -23,14 +25,17 @@ type Service interface {
 
 type service struct {
 	repository repository.UserRepository
+	log        *zap.Logger
 }
 
 func NewService(
 	repository repository.UserRepository,
+	log *zap.Logger,
 ) Service {
 
 	return &service{
 		repository: repository,
+		log:        log,
 	}
 }
 
@@ -63,15 +68,22 @@ func (s *service) Create(
 
 	user := &models.User{
 		FirstName: strings.TrimSpace(req.FirstName),
-		LastName: strings.TrimSpace(req.LastName),
-		Email: req.Email,
-		Password: hashedPassword,
-		IsActive: true,
+		LastName:  strings.TrimSpace(req.LastName),
+		Email:     req.Email,
+		Password:  hashedPassword,
+		IsActive:  true,
 	}
 
 	if err := s.repository.Create(ctx, user); err != nil {
 		return nil, err
 	}
+
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"user created",
+		zap.String("user_id", user.ID.String()),
+	)
 
 	resp := ToResponse(user)
 
@@ -109,6 +121,13 @@ func (s *service) Update(
 	if err := s.repository.Update(ctx, user); err != nil {
 		return nil, err
 	}
+
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"user updated",
+		zap.String("user_id", user.ID.String()),
+	)
 
 	resp := ToResponse(user)
 
@@ -163,7 +182,18 @@ func (s *service) Delete(
 		return ErrUserNotFound
 	}
 
-	return s.repository.Delete(ctx, id)
+	if err := s.repository.Delete(ctx, id); err != nil {
+		return err
+	}
+
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"user deleted",
+		zap.String("user_id", id.String()),
+	)
+
+	return nil
 }
 
 func IsBusinessError(err error) bool {

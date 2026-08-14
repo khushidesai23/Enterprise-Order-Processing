@@ -5,20 +5,25 @@ import (
 	"errors"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
+	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
 type Service struct {
 	categoryRepository *repository.CategoryRepository
+	log                *zap.Logger
 }
 
 func NewService(
 	categoryRepository *repository.CategoryRepository,
+	log *zap.Logger,
 ) *Service {
 	return &Service{
 		categoryRepository: categoryRepository,
+		log:                log,
 	}
 }
 
@@ -48,6 +53,14 @@ func (s *Service) CreateCategory(
 	); err != nil {
 		return nil, err
 	}
+
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"category created",
+		zap.String("category_id", category.ID.String()),
+		zap.String("name", category.Name),
+	)
 
 	category, err = s.categoryRepository.GetByID(
 		ctx,
@@ -143,6 +156,14 @@ func (s *Service) UpdateCategory(
 		return nil, err
 	}
 
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"category updated",
+		zap.String("category_id", category.ID.String()),
+		zap.String("name", category.Name),
+	)
+
 	category, err = s.categoryRepository.GetByID(
 		ctx,
 		category.ID,
@@ -189,8 +210,17 @@ func (s *Service) DeleteCategory(
 		return ErrCategoryInUse
 	}
 
-	return s.categoryRepository.Delete(
+	if err := s.categoryRepository.Delete(ctx, category); err != nil {
+		return err
+	}
+
+	logger.InfoContext(
 		ctx,
-		category,
+		s.log,
+		"category deleted",
+		zap.String("category_id", category.ID.String()),
+		zap.String("name", category.Name),
 	)
+
+	return nil
 }

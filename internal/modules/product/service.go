@@ -5,20 +5,25 @@ import (
 	"errors"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
+	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
 type Service struct {
 	productRepository *repository.ProductRepository
+	log               *zap.Logger
 }
 
 func NewService(
 	productRepository *repository.ProductRepository,
+	log *zap.Logger,
 ) *Service {
 	return &Service{
 		productRepository: productRepository,
+		log:               log,
 	}
 }
 
@@ -70,6 +75,14 @@ func (s *Service) CreateProduct(
 	if err != nil {
 		return nil, err
 	}
+
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"product created",
+		zap.String("product_id", product.ID.String()),
+		zap.String("sku", product.SKU),
+	)
 
 	response := ToProductResponse(product)
 
@@ -206,6 +219,14 @@ func (s *Service) UpdateProduct(
 		return nil, err
 	}
 
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"product updated",
+		zap.String("product_id", product.ID.String()),
+		zap.String("sku", product.SKU),
+	)
+
 	response := ToProductResponse(product)
 
 	return &response, nil
@@ -230,8 +251,16 @@ func (s *Service) DeleteProduct(
 		return err
 	}
 
-	return s.productRepository.Delete(
+	if err := s.productRepository.Delete(ctx, product); err != nil {
+		return err
+	}
+
+	logger.InfoContext(
 		ctx,
-		product,
+		s.log,
+		"product deleted",
+		zap.String("product_id", product.ID.String()),
 	)
+
+	return nil
 }
