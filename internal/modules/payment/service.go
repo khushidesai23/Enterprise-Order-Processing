@@ -287,6 +287,21 @@ func (s *Service) ProcessWebhook(
 
 	status, err := webhook.PaymentStatus()
 	if err != nil {
+
+		if errors.Is(err, ErrUnknownWebhookEvent) &&
+			webhook.EventName() == "order.paid" {
+
+			logger.InfoContext(
+				ctx,
+				s.log,
+				"payment webhook ignored",
+				zap.String("event_id", req.EventID),
+				zap.String("event", webhook.EventName()),
+			)
+
+			return nil
+		}
+
 		return err
 	}
 
