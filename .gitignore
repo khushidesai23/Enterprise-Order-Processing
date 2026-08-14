@@ -42,3 +42,7 @@ tmp/
 
 # Generated
 *.out
+
+# locust/config.py
+locust/.venv-locust/
+locust/__pycache__/
