@@ -1,32 +1,38 @@
 import os
+import random
 
 from locust import HttpUser, between, task
 
 
 class OrderProcessingUser(HttpUser):
-    wait_time = between(1, 2)
+    wait_time = between(1, 3)
 
     def on_start(self):
         self.token = None
 
-        email = os.getenv(
+        self.email = os.getenv(
             "LOCUST_EMAIL",
             "admin@example.com",
         )
 
-        password = os.getenv(
+        self.password = os.getenv(
             "LOCUST_PASSWORD",
             "Admin@123",
         )
 
-        self.login(email, password)
+        self.product_id = os.getenv(
+            "LOCUST_PRODUCT_ID",
+            "3cfd7483-2081-441a-b640-884316909367",
+        )
 
-    def login(self, email, password):
+        self.login()
+
+    def login(self):
         with self.client.post(
             "/api/v1/auth/login",
             json={
-                "email": email,
-                "password": password,
+                "email": self.email,
+                "password": self.password,
             },
             name="POST /auth/login",
             catch_response=True,
@@ -34,7 +40,7 @@ class OrderProcessingUser(HttpUser):
 
             if response.status_code != 200:
                 response.failure(
-                    f"Login failed: HTTP {response.status_code}"
+                    f"Login failed: {response.status_code}"
                 )
                 return
 
@@ -44,32 +50,20 @@ class OrderProcessingUser(HttpUser):
                 response.failure("Invalid JSON response")
                 return
 
-            # Adjust this according to your actual API response.
-            token = (
+            self.token = (
                 body.get("data", {})
                 .get("token")
             )
 
-            if not token:
+            if not self.token:
                 response.failure(
-                    f"JWT token not found: {body}"
+                    "JWT token not found"
                 )
-                return
-
-            self.token = token
 
     def auth_headers(self):
         return {
             "Authorization": f"Bearer {self.token}"
         }
-
-    @task(5)
-    def get_categories(self):
-        self.client.get(
-            "/api/v1/categories",
-            headers=self.auth_headers(),
-            name="GET /categories",
-        )
 
     @task(5)
     def get_products(self):
@@ -80,9 +74,45 @@ class OrderProcessingUser(HttpUser):
         )
 
     @task(3)
+    def get_categories(self):
+        self.client.get(
+            "/api/v1/categories",
+            headers=self.auth_headers(),
+            name="GET /categories",
+        )
+
+    @task(2)
     def get_orders(self):
         self.client.get(
             "/api/v1/orders",
             headers=self.auth_headers(),
             name="GET /orders",
         )
+
+    @task(1)
+    def create_order(self):
+        if not self.product_id:
+            return
+
+        payload = {
+            "items": [
+                {
+                    "product_id": self.product_id,
+                    "quantity": random.randint(1, 2),
+                }
+            ]
+        }
+
+        with self.client.post(
+            "/api/v1/orders",
+            json=payload,
+            headers=self.auth_headers(),
+            name="POST /orders",
+            catch_response=True,
+        ) as response:
+
+            if response.status_code not in (200, 201):
+                response.failure(
+                    f"Create order failed: "
+                    f"{response.status_code}"
+                )
