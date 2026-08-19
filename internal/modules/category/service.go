@@ -12,7 +12,12 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
-type CategoryRepository interface {
+type Service struct {
+	categoryRepository categoryRepository
+	log                *zap.Logger
+}
+
+type categoryRepository interface {
 	Create(ctx context.Context, category *models.Category) error
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Category, error)
 	GetAll(ctx context.Context) ([]models.Category, error)
@@ -23,13 +28,8 @@ type CategoryRepository interface {
 	Delete(ctx context.Context, category *models.Category) error
 }
 
-type Service struct {
-	categoryRepository CategoryRepository
-	log                *zap.Logger
-}
-
 func NewService(
-	categoryRepository CategoryRepository,
+	categoryRepository categoryRepository,
 	log *zap.Logger,
 ) *Service {
 	return &Service{
