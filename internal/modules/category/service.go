@@ -8,17 +8,16 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
 type Service struct {
-	categoryRepository *repository.CategoryRepository
+	categoryRepository CategoryRepository
 	log                *zap.Logger
 }
 
 func NewService(
-	categoryRepository *repository.CategoryRepository,
+	categoryRepository CategoryRepository,
 	log *zap.Logger,
 ) *Service {
 	return &Service{
