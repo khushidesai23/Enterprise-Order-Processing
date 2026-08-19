@@ -25,6 +25,7 @@ require (
 )
 
 require (
+	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/uptrace/opentelemetry-go-extra/otelsql v0.3.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
