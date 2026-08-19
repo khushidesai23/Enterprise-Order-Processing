@@ -12,23 +12,50 @@ import (
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
 	ordermodule "github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/order"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
 type Service struct {
-	paymentRepository *repository.PaymentRepository
-	webhookRepository *repository.PaymentWebhookRepository
-	orderService      *ordermodule.Service
+	paymentRepository paymentRepository
+	webhookRepository webhookRepository
+	orderService      orderService
 	gateway           PaymentGateway
 	keyID             string
 	log               *zap.Logger
 }
 
+type paymentRepository interface {
+	Begin(ctx context.Context) *gorm.DB
+	Create(ctx context.Context, tx *gorm.DB, payment *models.Payment) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Payment, error)
+	GetByIDTx(ctx context.Context, tx *gorm.DB, id uuid.UUID) (*models.Payment, error)
+	GetByOrderID(ctx context.Context, orderID uuid.UUID) (*models.Payment, error)
+	GetByOrderIDTx(ctx context.Context, tx *gorm.DB, orderID uuid.UUID) (*models.Payment, error)
+	GetByGatewayOrderIDTx(ctx context.Context, tx *gorm.DB, gatewayOrderID string) (*models.Payment, error)
+	GetAll(ctx context.Context) ([]models.Payment, error)
+	UpdateStatus(ctx context.Context, tx *gorm.DB, id uuid.UUID, status models.PaymentStatus) error
+	CompletePayment(ctx context.Context, tx *gorm.DB, id uuid.UUID, transactionID *string, status models.PaymentStatus) error
+}
+
+type webhookRepository interface {
+	Create(ctx context.Context, tx *gorm.DB, webhook *models.PaymentWebhook) error
+	MarkProcessed(ctx context.Context, tx *gorm.DB, payloadID string, processedAt time.Time) error
+	MarkFailed(ctx context.Context, tx *gorm.DB, payloadID string, processedAt time.Time) error
+}
+
+type orderService interface {
+	GetOrderForPaymentTx(tx *gorm.DB, id uuid.UUID) (*models.Order, error)
+	GetOrderForPayment(ctx context.Context, id uuid.UUID) (*models.Order, error)
+	MarkOrderPaymentPending(tx *gorm.DB, orderID uuid.UUID) error
+	MarkOrderPaid(tx *gorm.DB, orderID uuid.UUID) error
+	CancelOrderByPaymentFailure(tx *gorm.DB, orderID uuid.UUID) error
+	RefundOrder(tx *gorm.DB, orderID uuid.UUID) error
+}
+
 func NewService(
-	paymentRepository *repository.PaymentRepository,
-	webhookRepository *repository.PaymentWebhookRepository,
-	orderService *ordermodule.Service,
+	paymentRepository paymentRepository,
+	webhookRepository webhookRepository,
+	orderService orderService,
 	gateway PaymentGateway,
 	keyID string,
 	log *zap.Logger,
