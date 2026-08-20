@@ -6,7 +6,7 @@ type Inventory struct {
 	BaseModel
 
 	ProductID uuid.UUID `gorm:"uniqueIndex;not null"`
-	Product Product `gorm:"foreignKey:ProductID"`
+	Product   Product   `gorm:"foreignKey:ProductID"`
 
 	AvailableQuantity int `gorm:"default:0"`
 	ReservedQuantity  int `gorm:"default:0"`

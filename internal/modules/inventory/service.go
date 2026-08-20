@@ -8,19 +8,36 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
 type Service struct {
-	inventoryRepository *repository.InventoryRepository
-	productRepository   *repository.ProductRepository
+	inventoryRepository inventoryRepository
+	productRepository   inventoryProductRepository
 	log                 *zap.Logger
 }
 
+type inventoryRepository interface {
+	Create(ctx context.Context, inventory *models.Inventory) error
+	GetByProductID(ctx context.Context, productID uuid.UUID) (*models.Inventory, error)
+	GetAll(ctx context.Context) ([]models.Inventory, error)
+	ExistsByProductID(ctx context.Context, productID uuid.UUID) (bool, error)
+	Update(ctx context.Context, inv *models.Inventory) error
+	AddStock(ctx context.Context, productID uuid.UUID, quantity int) error
+	RemoveStock(ctx context.Context, productID uuid.UUID, quantity int) error
+	ReserveStock(ctx context.Context, productID uuid.UUID, quantity int) error
+	ReleaseReservedStock(ctx context.Context, productID uuid.UUID, quantity int) error
+	ConfirmReservedStock(ctx context.Context, productID uuid.UUID, quantity int) error
+}
+
+type inventoryProductRepository interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Product, error)
+}
+
 func NewService(
-	inventoryRepository *repository.InventoryRepository,
-	productRepository *repository.ProductRepository,
+	inventoryRepository inventoryRepository,
+	productRepository inventoryProductRepository,
 	log *zap.Logger,
 ) *Service {
 	return &Service{

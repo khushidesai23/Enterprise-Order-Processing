@@ -22,22 +22,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
-
 	"github.com/khushidesai23/Enterprise-Order-Processing/config"
 	_ "github.com/khushidesai23/Enterprise-Order-Processing/docs"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/handlers"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/middleware"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/routes"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/app"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/database"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/auth"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/category"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/inventory"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/order"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/payment"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/product"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/user"
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/telemetry"
 )
@@ -77,12 +65,6 @@ func main() {
 			)
 		}
 	}()
-
-	//Initialize JWT Manager
-	jwtManager := auth.NewJWTManager(
-		cfg.JWTSecret,
-		cfg.JWTExpiration,
-	)
 
 	// Logger
 	log := logger.New()
@@ -125,75 +107,14 @@ func main() {
 
 	log.Info("database migration completed")
 
-	// Dependency Injection
-	healthHandler := handlers.NewHealthHandler(cfg, db)
-
-	userRepository := repository.NewUserRepository(db.DB)
-	userService := user.NewService(userRepository, log)
-	userHandler := user.NewHandler(userService)
-
-	authService := auth.NewService(userRepository, jwtManager, cfg, log)
-	authHandler := auth.NewHandler(authService)
-
-	productRepository := repository.NewProductRepository(db.DB)
-	productService := product.NewService(productRepository, log)
-	productHandler := product.NewHandler(productService)
-
-	categoryRepository := repository.NewCategoryRepository(db.DB)
-	categoryService := category.NewService(categoryRepository, log)
-	categoryHandler := category.NewHandler(categoryService)
-
-	inventoryRepository := repository.NewInventoryRepository(db.DB)
-	inventoryService := inventory.NewService(inventoryRepository, productRepository, log)
-	inventoryHandler := inventory.NewHandler(inventoryService)
-
-	orderRepository := repository.NewOrderRepository(db.DB)
-	orderItemRepository := repository.NewOrderItemRepository(db.DB)
-	orderService := order.NewService(orderRepository, orderItemRepository, userRepository, productRepository, inventoryRepository, log)
-	orderHandler := order.NewHandler(orderService)
-
-	paymentRepository := repository.NewPaymentRepository(db.DB)
-	paymentWebhookRepository := repository.NewPaymentWebhookRepository(db.DB)
-
-	gateway := payment.NewRazorpayGateway(
-		cfg.RazorpayKeyID,
-		cfg.RazorpayKeySecret,
-		cfg.RazorpayWebhookSecret,
-	)
-
-	paymentService := payment.NewService(
-		paymentRepository,
-		paymentWebhookRepository,
-		orderService,
-		gateway,
-		cfg.RazorpayKeyID,
-		log,
-	)
-	paymentHandler := payment.NewHandler(paymentService)
-
-	// Router
-	router := gin.New()
-	router.Use(gin.Recovery())
-	router.Use(
-		otelgin.Middleware(
-			cfg.OTelServiceName,
-		),
-	)
-	router.Use(middleware.RequestLogger(log))
-	router.Use(middleware.CORS())
-
-	routes.Register(
-		router,
-		healthHandler,
-		userHandler,
-		productHandler,
-		categoryHandler,
-		inventoryHandler,
-		orderHandler,
-		paymentHandler,
-		authHandler,
-		jwtManager,
-	)
+	router, err := app.NewRouter(app.RouterOptions{
+		Config:   cfg,
+		Database: db,
+		Logger:   log,
+	})
+	if err != nil {
+		log.Fatal("router initialization failed", zap.Error(err))
+	}
 
 	// HTTP Server
 	server := &http.Server{

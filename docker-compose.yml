@@ -47,5 +47,28 @@ services:
     depends_on:
       - jaeger
 
+  postgres-test:
+    image: postgres:16
+    container_name: order-postgres-test
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${TEST_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${TEST_DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${TEST_DB_NAME:-order_processing_test}
+
+    ports:
+      - "${TEST_DB_PORT:-5433}:5432"
+
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TEST_DB_USER:-postgres} -d ${TEST_DB_NAME:-order_processing_test}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
+  postgres_test_data:

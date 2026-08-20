@@ -14,22 +14,48 @@ import (
 )
 
 type Service struct {
-	orderRepository     *repository.OrderRepository
-	orderItemRepository *repository.OrderItemRepository
+	orderRepository     orderRepository
+	orderItemRepository orderItemRepository
 	userRepository      repository.UserRepository
-	productRepository   *repository.ProductRepository
-	inventoryRepository *repository.InventoryRepository
+	productRepository   orderProductRepository
+	inventoryRepository orderInventoryRepository
 	log                 *zap.Logger
+}
+
+type orderRepository interface {
+	Begin(ctx context.Context) *gorm.DB
+	Create(ctx context.Context, tx *gorm.DB, order *models.Order) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Order, error)
+	GetByIDTx(ctx context.Context, tx *gorm.DB, id uuid.UUID) (*models.Order, error)
+	GetAll(ctx context.Context) ([]models.Order, error)
+	GetByUserID(ctx context.Context, userID uuid.UUID) ([]models.Order, error)
+	UpdateTotalAmount(ctx context.Context, tx *gorm.DB, id uuid.UUID, total float64) error
+	UpdateStatusTx(ctx context.Context, tx *gorm.DB, id uuid.UUID, status models.OrderStatus) error
+}
+
+type orderItemRepository interface {
+	CreateMany(ctx context.Context, tx *gorm.DB, items []models.OrderItem) error
+}
+
+type orderProductRepository interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Product, error)
+}
+
+type orderInventoryRepository interface {
+	GetByProductIDTx(ctx context.Context, tx *gorm.DB, productID uuid.UUID) (*models.Inventory, error)
+	ReserveStockTx(ctx context.Context, tx *gorm.DB, productID uuid.UUID, quantity int) error
+	ReleaseReservedStockTx(ctx context.Context, tx *gorm.DB, productID uuid.UUID, quantity int) error
+	ConfirmReservedStockTx(ctx context.Context, tx *gorm.DB, productID uuid.UUID, quantity int) error
 }
 
 var ErrInsufficientReserved = errors.New("insufficient reserved inventory")
 
 func NewService(
-	orderRepository *repository.OrderRepository,
-	orderItemRepository *repository.OrderItemRepository,
+	orderRepository orderRepository,
+	orderItemRepository orderItemRepository,
 	userRepository repository.UserRepository,
-	productRepository *repository.ProductRepository,
-	inventoryRepository *repository.InventoryRepository,
+	productRepository orderProductRepository,
+	inventoryRepository orderInventoryRepository,
 	log *zap.Logger,
 ) *Service {
 
