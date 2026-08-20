@@ -9,14 +9,14 @@ func RegisterRoutes(
 ) {
 	categories := router.Group("/categories")
 	{
-		categories.POST("",auth, handler.CreateCategory)
+		categories.POST("", auth, handler.CreateCategory)
 
 		categories.GET("", handler.GetCategories)
 
 		categories.GET("/:id", handler.GetCategory)
 
-		categories.PUT("/:id",auth, handler.UpdateCategory)
+		categories.PUT("/:id", auth, handler.UpdateCategory)
 
-		categories.DELETE("/:id",auth, handler.DeleteCategory)
+		categories.DELETE("/:id", auth, handler.DeleteCategory)
 	}
 }

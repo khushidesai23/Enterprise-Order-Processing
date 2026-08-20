@@ -12,8 +12,8 @@ type CreateOrderItemRequest struct {
 }
 
 type CreateOrderRequest struct {
-	UserID uuid.UUID `json:"-"`
-	Items []CreateOrderItemRequest `json:"items" binding:"required,min=1,dive"`
+	UserID uuid.UUID                `json:"-"`
+	Items  []CreateOrderItemRequest `json:"items" binding:"required,min=1,dive"`
 }
 
 type UpdateOrderStatusRequest struct {
