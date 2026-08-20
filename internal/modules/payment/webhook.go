@@ -15,13 +15,13 @@ type RazorpayWebhook struct {
 	// Merchant Account ID
 	AccountID string `json:"account_id"`
 	// Webhook creation timestamp (Unix)
-	CreatedAt int64 `json:"created_at"`
-	Payload RazorpayWebhookPayload `json:"payload"`
+	CreatedAt int64                  `json:"created_at"`
+	Payload   RazorpayWebhookPayload `json:"payload"`
 }
 
 type RazorpayWebhookPayload struct {
 	// Unique payload id
-	ID string `json:"id"`
+	ID      string                 `json:"id"`
 	Payment RazorpayPaymentPayload `json:"payment"`
 }
 
@@ -33,14 +33,14 @@ type RazorpayPaymentEntity struct {
 	// Razorpay Payment ID
 	ID string `json:"id"`
 	// Razorpay Order ID
-	OrderID string `json:"order_id"`
-	Status string `json:"status"`
-	Amount int64 `json:"amount"`
-	Currency string `json:"currency"`
-	Method string `json:"method"`
+	OrderID     string `json:"order_id"`
+	Status      string `json:"status"`
+	Amount      int64  `json:"amount"`
+	Currency    string `json:"currency"`
+	Method      string `json:"method"`
 	Description string `json:"description"`
-	Email string `json:"email"`
-	Contact string `json:"contact"`
+	Email       string `json:"email"`
+	Contact     string `json:"contact"`
 }
 
 // Parse Webhook
