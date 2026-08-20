@@ -33,14 +33,14 @@ type ProductResponse struct {
 }
 
 type ProductListResponse struct {
-	ID          uuid.UUID `json:"id"`
-	Name        string    `json:"name"`
-	SKU         string    `json:"sku"`
-	Price       float64   `json:"price"`
-	CategoryID  uuid.UUID `json:"category_id"`
-	Category    string    `json:"category"`
-	Available   int        `json:"available_quantity"`
-	Reserved    int        `json:"reserved_quantity"`
+	ID         uuid.UUID `json:"id"`
+	Name       string    `json:"name"`
+	SKU        string    `json:"sku"`
+	Price      float64   `json:"price"`
+	CategoryID uuid.UUID `json:"category_id"`
+	Category   string    `json:"category"`
+	Available  int       `json:"available_quantity"`
+	Reserved   int       `json:"reserved_quantity"`
 }
 
 type CategoryResponse struct {

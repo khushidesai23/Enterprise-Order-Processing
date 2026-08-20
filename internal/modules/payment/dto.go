@@ -108,7 +108,7 @@ type PaymentSummary struct {
 
 // Process Webhook Request
 type ProcessWebhookRequest struct {
-	Body []byte
+	Body      []byte
 	Signature string
-	EventID string
+	EventID   string
 }

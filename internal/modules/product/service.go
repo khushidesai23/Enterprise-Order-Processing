@@ -8,17 +8,29 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
 type Service struct {
-	productRepository *repository.ProductRepository
+	productRepository productRepository
 	log               *zap.Logger
 }
 
+type productRepository interface {
+	Create(ctx context.Context, product *models.Product) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Product, error)
+	GetAll(ctx context.Context) ([]models.Product, error)
+	GetByCategory(ctx context.Context, categoryID uuid.UUID) ([]models.Product, error)
+	ExistsBySKU(ctx context.Context, sku string) (bool, error)
+	ExistsBySKUExceptID(ctx context.Context, id uuid.UUID, sku string) (bool, error)
+	CategoryExists(ctx context.Context, categoryID uuid.UUID) (bool, error)
+	Update(ctx context.Context, product *models.Product) error
+	Delete(ctx context.Context, product *models.Product) error
+}
+
 func NewService(
-	productRepository *repository.ProductRepository,
+	productRepository productRepository,
 	log *zap.Logger,
 ) *Service {
 	return &Service{

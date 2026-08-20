@@ -25,10 +25,10 @@ var (
 	ErrInsufficientStock = errors.New("insufficient stock available")
 
 	// Status Errors
-	ErrInvalidOrderStatus    = errors.New("invalid order status")
-	ErrOrderAlreadyCancelled = errors.New("order is already cancelled")
-	ErrOrderAlreadyCompleted = errors.New("order is already delivered")
-	ErrOrderCannotBeModified = errors.New("order cannot be modified")
+	ErrInvalidOrderStatus     = errors.New("invalid order status")
+	ErrOrderAlreadyCancelled  = errors.New("order is already cancelled")
+	ErrOrderAlreadyCompleted  = errors.New("order is already delivered")
+	ErrOrderCannotBeModified  = errors.New("order cannot be modified")
 	ErrOrderCannotBeCancelled = errors.New("order cannot be cancelled in the current status")
 
 	// Payment Errors

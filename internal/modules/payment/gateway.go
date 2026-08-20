@@ -20,14 +20,13 @@ type GatewayOrderResponse struct {
 
 // Gateway Verification
 type GatewayVerificationRequest struct {
-	OrderID    string
-	PaymentID  string
-	Signature  string
+	OrderID   string
+	PaymentID string
+	Signature string
 }
 
 // Payment Gateway Interface
 type PaymentGateway interface {
-
 	CreateOrder(
 		ctx context.Context,
 		req GatewayOrderRequest,
