@@ -126,6 +126,7 @@ func NewRouter(options RouterOptions) (*gin.Engine, error) {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(otelgin.Middleware(options.Config.OTelServiceName))
+	router.Use(middleware.Prometheus())
 	router.Use(middleware.RequestLogger(options.Logger))
 	router.Use(middleware.CORS())
 

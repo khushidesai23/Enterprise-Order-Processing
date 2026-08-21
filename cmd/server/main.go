@@ -27,6 +27,7 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/app"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/database"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
+	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/metrics"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/telemetry"
 )
 
@@ -39,6 +40,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	// Register Prometheus metrics
+	metrics.Register()
 
 	// Initialize OpenTelemetry
 	otelShutdown, err := telemetry.InitTracer(
