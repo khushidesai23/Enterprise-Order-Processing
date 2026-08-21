@@ -2,6 +2,7 @@ package routes
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/handlers"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/middleware"
@@ -35,6 +36,11 @@ func Register(
 	router.GET(
 		"/swagger/*any",
 		ginSwagger.WrapHandler(swaggerFiles.Handler),
+	)
+
+	router.GET(
+		"/metrics",
+		gin.WrapH(promhttp.Handler()),
 	)
 
 	authMiddleware := middleware.AuthMiddleware(jwtManager)
