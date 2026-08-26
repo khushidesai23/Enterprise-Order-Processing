@@ -1,86 +1,242 @@
-# Enterprise Order Processing System
+# Enterprise Order Processing Platform
 
-A production-inspired **Enterprise Order Processing System** built with **Go (Golang)** following **Clean Architecture**, **SOLID principles**, and enterprise backend development practices.
+A backend-focused, enterprise-style Order Processing Platform built to demonstrate production-oriented backend engineering practices.
 
-The project simulates a complete e-commerce order lifecycle, including inventory reservation, payment processing with **Razorpay**, webhook handling, JWT authentication, and transactional consistency.
+The project is implemented as a **modular monolith** in Go. It currently provides transactional order processing, inventory reservation, Razorpay payment integration, authentication, testing, OpenTelemetry tracing, Prometheus metrics, Grafana visualization, structured logging, Docker-based local infrastructure, and GitHub Actions CI.
+
+> The project is intentionally evolving in phases. Advanced event-driven capabilities such as Debezium, Kafka, TimescaleDB, notification consumers, analytics consumers, and audit consumers are planned for later phases.
 
 ---
 
-# Features
+## Current Implementation Status
+
+### Implemented
+
+- Go backend using Gin
+- PostgreSQL with GORM
+- Modular monolith architecture
+- Repository and service layers
+- JWT authentication and protected APIs
+- User management
+- Category management
+- Product management
+- Inventory management
+- Transaction-safe order creation
+- Inventory reservation lifecycle
+- Razorpay payment integration
+- Checkout signature verification
+- Razorpay webhook signature verification
+- Idempotent webhook handling
+- Payment and order state updates
+- Swagger/OpenAPI documentation
+- Structured logging with Zap
+- OpenTelemetry distributed tracing
+- Jaeger trace visualization
+- Prometheus metrics
+- Grafana provisioning with Prometheus datasource
+- Health and readiness endpoints
+- Graceful shutdown
+- Docker Compose local infrastructure
+- Unit, repository integration, service integration, and end-to-end tests
+- GitHub Actions CI
+- Locust load-testing scripts
+
+### Planned
+
+- PostgreSQL CDC
+- Debezium
+- Kafka/event streaming
+- Event consumers
+- Notification service
+- Analytics service
+- Audit/event service
+- TimescaleDB
+- Business dashboards
+- Alerting
+- Data retention and archival
+
+See [documentation/ROADMAP.md](documentation/ROADMAP.md) for the implementation roadmap.
+
+---
+
+# Architecture
+
+```text
+                                Clients
+                                   |
+                                   v
+                           Gin HTTP Router
+                                   |
+                    +--------------+--------------+
+                    |                             |
+                    v                             v
+             Public Endpoints              JWT Middleware
+                                                  |
+                                                  v
+                                              Handlers
+                                                  |
+                                                  v
+                                               Services
+                                                  |
+                                                  v
+                                             Repositories
+                                                  |
+                                                  v
+                                             PostgreSQL
+                                                  |
+                    +-----------------------------+-----------------------------+
+                    |                             |                             |
+                    v                             v                             v
+              Prometheus Metrics            OpenTelemetry                 Zap Logging
+                    |                             |
+                    v                             v
+               Prometheus                  OTEL Collector
+                    |                             |
+                    v                             v
+                Grafana                        Jaeger
+```
+
+The application is currently a modular monolith. Business modules are separated internally so that selected domains can later be extracted into independent services if required.
+
+For more detail, see [documentation/ARCHITECTURE.md](documentation/ARCHITECTURE.md).
+
+---
+
+# Technology Stack
+
+| Area | Technology |
+|---|---|
+| Language | Go |
+| HTTP Framework | Gin |
+| ORM | GORM |
+| Database | PostgreSQL 16 |
+| Authentication | JWT |
+| Payment Gateway | Razorpay |
+| Configuration | Viper |
+| Logging | Zap |
+| API Documentation | Swagger / Swaggo |
+| Tracing | OpenTelemetry |
+| Trace Backend | Jaeger |
+| Metrics | Prometheus |
+| Visualization | Grafana |
+| Load Testing | Locust |
+| Containers | Docker Compose |
+| CI | GitHub Actions |
+
+---
+
+# Core Business Modules
 
 ## Authentication
 
-* JWT-based authentication
-* Secure login
-* Protected API routes
-* Swagger Bearer authentication support
+Provides:
 
-## User Management
+- Login
+- JWT generation
+- Authenticated user lookup
+- Protected API access
 
-* User registration
-* User CRUD operations
-* Password hashing using bcrypt
-* Input validation
+## Users
 
-## Category Management
+Provides user creation, retrieval, update, and management through the application module structure.
 
-* Category CRUD operations
+## Categories and Products
 
-## Product Management
+Provides catalog organization through category and product modules.
 
-* Product CRUD operations
-* Category mapping
-* Product availability management
+## Inventory
 
-## Inventory Management
+Inventory tracks stock quantities and supports reservation as part of the order workflow.
 
-* Inventory CRUD operations
-* Stock reservation
-* Stock confirmation
-* Stock release
-* Transaction-safe inventory updates
+The current business flow is:
 
-## Order Management
+```text
+Available Stock
+      |
+      v
+Order Created
+      |
+      v
+Inventory Reserved
+      |
+      +----------------------------+
+      |                            |
+      v                            v
+Payment / Order Continues       Order Cancelled
+      |                            |
+      v                            v
+Reservation Confirmed          Reserved Stock Released
+```
 
-* Multi-item order creation
-* Order lifecycle management
-* Automatic inventory reservation
-* Order cancellation
-* Order status validation
+## Orders
 
-## Payment Module
+Order creation is handled transactionally together with the required inventory reservation work so the core business state remains consistent.
 
-* Razorpay Order creation
-* Razorpay Checkout integration
-* Checkout signature verification
-* Secure webhook verification
-* Idempotent webhook processing
-* Payment status synchronization
-* Automatic order status update after successful payment
-* Refund-ready architecture
+## Payments
 
-## API Documentation
+Razorpay is integrated for payment processing.
 
-* Swagger UI integration
-* Interactive API testing
-* JWT Authorization support
+The payment flow includes:
+
+```text
+Create Order
+      |
+      v
+Reserve Inventory
+      |
+      v
+Create Payment / Razorpay Order
+      |
+      v
+Customer Completes Checkout
+      |
+      v
+Verify Checkout Signature
+      |
+      v
+Razorpay Webhook Received
+      |
+      v
+Verify Webhook Signature
+      |
+      v
+Persist Webhook Idempotently
+      |
+      v
+Update Payment State
+      |
+      v
+Update Order State
+```
 
 ---
 
-# Tech Stack
+# Order Lifecycle
 
-| Category        | Technology         |
-| --------------- | ------------------ |
-| Language        | Go                 |
-| Framework       | Gin                |
-| ORM             | GORM               |
-| Database        | PostgreSQL         |
-| Authentication  | JWT                |
-| Payment Gateway | Razorpay           |
-| Configuration   | Viper              |
-| Logging         | Zap                |
-| Documentation   | Swagger (Swaggo)   |
-| API             | REST               |
+The project models a commerce-style lifecycle:
+
+```text
+Created
+   |
+   v
+Payment Pending
+   |
+   +--> Payment Failed
+   |
+   v
+Paid
+   |
+   v
+Packed
+   |
+   v
+Shipped
+   |
+   v
+Delivered
+```
+
+Cancellation and refund-related behavior are handled according to the current business rules and payment/inventory lifecycle.
 
 ---
 
@@ -88,261 +244,279 @@ The project simulates a complete e-commerce order lifecycle, including inventory
 
 ```text
 .
+├── .github/
+│   └── workflows/
+│       └── ci.yml
+│
 ├── cmd/
 │   └── server/
 │       └── main.go
 │
 ├── config/
+│   ├── config.go
+│   ├── collector-config.yaml
+│   ├── prometheus.yml
+│   └── grafana/
+│       └── provisioning/
 │
 ├── docs/
+│   ├── docs.go
+│   ├── swagger.json
+│   └── swagger.yaml
+│
+├── documentation/
+│   ├── ARCHITECTURE.md
+│   ├── DEVELOPMENT.md
+│   ├── OBSERVABILITY.md
+│   ├── ROADMAP.md
+│   └── TESTING.md
 │
 ├── internal/
 │   ├── api/
+│   │   ├── handlers/
+│   │   ├── middleware/
+│   │   ├── response/
+│   │   └── routes/
+│   │
+│   ├── app/
+│   │   └── router.go
+│   │
 │   ├── database/
+│   │   ├── health.go
+│   │   ├── migrate.go
+│   │   └── postgres.go
+│   │
 │   ├── models/
+│   │
+│   ├── modules/
+│   │   ├── auth/
+│   │   ├── user/
+│   │   ├── category/
+│   │   ├── product/
+│   │   ├── inventory/
+│   │   ├── order/
+│   │   └── payment/
+│   │
 │   ├── repository/
-│   └── modules/
-│       ├── auth/
-│       ├── user/
-│       ├── category/
-│       ├── product/
-│       ├── inventory/
-│       ├── order/
-│       └── payment/
+│   │
+│   └── test/
+│       ├── e2e/
+│       ├── integration/
+│       ├── helpers/
+│       └── mocks/
+│
+├── locust/
+│   ├── config.py
+│   └── locustfile.py
+│
+├── payment-demo/
+│   ├── index.html
+│   └── app.js
 │
 ├── pkg/
+│   ├── logger/
+│   ├── metrics/
+│   └── telemetry/
 │
+├── docker-compose.yml
+├── Makefile
+├── go.mod
 └── README.md
 ```
 
 ---
 
-# Architecture
+# Local Prerequisites
 
-```text
-                Client
-                   │
-                   ▼
-            Gin HTTP Router
-                   │
-                   ▼
-        JWT Authentication Middleware
-                   │
-                   ▼
-              Route Handlers
-                   │
-                   ▼
-                Services
-                   │
-                   ▼
-             Repository Layer
-                   │
-                   ▼
-               PostgreSQL
-```
+Install:
+
+- Go version defined by `go.mod`
+- Docker and Docker Compose
+- Git
+
+Optional:
+
+- ngrok for Razorpay webhook testing
+- Python environment for Locust
 
 ---
 
-# Order Lifecycle
+# Configuration
 
-```text
-     Created
-        │
-        ▼
- Payment Pending
-        │
-        ▼
-      Paid
-        │
-        ▼
-      Packed
-        │
-        ▼
-     Shipped
-        │
-        ▼
-    Delivered
-```
-
-Orders can be cancelled before shipment.
-
----
-
-# Payment Flow
-
-```text
-  Create Order
-        │
-        ▼
-  Reserve Inventory
-        │
-        ▼
-  Create Razorpay Order
-        │
-        ▼
-  Customer Completes Payment
-        │
-        ▼
-  Verify Checkout Signature
-        │
-        ▼
-  Receive Razorpay Webhook
-        │
-        ▼
-  Verify Webhook Signature
-        │
-        ▼
-  Persist Webhook
-        │
-        ▼
-  Update Payment Status
-        │
-        ▼
-  Update Order Status
-        │
-        ▼
-  Commit Transaction
-```
-
----
-
-# Inventory Flow
-
-```text
-Available = 100
-Reserved  = 0
-↓
-Order Created
-
-Available = 98
-Reserved  = 2
-↓
-Payment Pending
-
-Available = 98
-Reserved  = 2
-↓
-Payment Successful
-
-Available = 98
-Reserved  = 2
-↓
-Order Shipped
-
-Available = 98
-Reserved  = 0
-```
-
-If an order is cancelled before shipment:
-
-```text
-Available += Reserved Quantity
-Reserved = 0
-```
-
----
-
-# Business Rules
-
-* Inventory is reserved immediately after order creation.
-* Reserved inventory is confirmed when the order is shipped.
-* Cancelled orders release reserved inventory.
-* Payment processing is idempotent.
-* Duplicate webhook deliveries are ignored.
-* Razorpay webhook signatures are verified.
-* Checkout signatures are verified before accepting successful payments.
-* Order status transitions are validated.
-* All critical database operations are transaction-safe.
-
----
-
-# API Modules
-
-* Authentication
-* User
-* Category
-* Product
-* Inventory
-* Order
-* Payment
-
----
-
-# Running the Project
-
-## Clone Repository
+Copy the example environment file:
 
 ```bash
-git clone https://github.com/<your-username>/Enterprise-Order-Processing.git
+cp .env.example .env
+```
 
-cd Enterprise-Order-Processing
+Configure the application values in `.env`.
+
+The current application expects values for:
+
+```env
+APP_NAME=Enterprise Order Processing
+APP_ENV=development
+APP_PORT=8080
+
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_NAME=order_processing
+DB_SSLMODE=disable
+
+JWT_SECRET=replace-with-a-secure-secret
+JWT_EXPIRATION=24h
+
+LOG_LEVEL=debug
+
+RAZORPAY_KEY_ID=your_razorpay_test_key
+RAZORPAY_KEY_SECRET=your_razorpay_test_secret
+RAZORPAY_WEBHOOK_SECRET=your_razorpay_webhook_secret
+
+OTEL_SERVICE_NAME=enterprise-order-processing
+OTEL_SERVICE_VERSION=1.0.0
+OTEL_ENVIRONMENT=development
+OTEL_EXPORTER_OTLP_ENDPOINT=localhost:4317
+
+TEST_DB_HOST=localhost
+TEST_DB_PORT=5433
+TEST_DB_USER=postgres
+TEST_DB_PASSWORD=postgres
+TEST_DB_NAME=order_processing_test
+TEST_DB_SSLMODE=disable
+
+TEST_RAZORPAY_KEY_ID=rzp_test_key
+TEST_RAZORPAY_KEY_SECRET=rzp_test_secret
+TEST_RAZORPAY_WEBHOOK_SECRET=rzp_test_webhook_secret
+TEST_JWT_SECRET=test-jwt-secret
+```
+
+Do not commit real secrets.
+
+---
+
+# Start Local Infrastructure
+
+Start all Docker services:
+
+```bash
+docker compose up -d
+```
+
+Current Compose services:
+
+- PostgreSQL
+- PostgreSQL test database
+- Jaeger
+- OpenTelemetry Collector
+- Prometheus
+- Grafana
+
+Check service status:
+
+```bash
+docker compose ps
+```
+
+View logs:
+
+```bash
+docker compose logs -f
+```
+
+Stop infrastructure:
+
+```bash
+docker compose down
 ```
 
 ---
 
-## Install Dependencies
+# Run the Application
+
+Install dependencies:
 
 ```bash
 go mod tidy
 ```
 
----
-
-## Configure Environment
-
-Create a `.env` file.
-
-```env
-APP_ENV=development
-
-SERVER_PORT=8080
-
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=password
-DB_NAME=order_processing
-DB_SSLMODE=disable
-
-JWT_SECRET=your-secret-key
-JWT_EXPIRATION=24h
-
-RAZORPAY_KEY_ID=rzp_test_xxxxxxxxx
-RAZORPAY_KEY_SECRET=xxxxxxxxxxxxxxxx
-RAZORPAY_WEBHOOK_SECRET=xxxxxxxxxxxxxxxx
-```
-
----
-
-## Start PostgreSQL
-
-Ensure PostgreSQL is running.
-
----
-
-## Run the Application
+Run the API:
 
 ```bash
 go run ./cmd/server
 ```
 
+Or use:
+
+```bash
+make run
+```
+
+The server starts on:
+
+```text
+http://localhost:8080
+```
+
+---
+
+# Available Endpoints
+
+## Application
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /` | Root health response |
+| `GET /api/v1/health` | Application health |
+| `GET /api/v1/ready` | Readiness check |
+| `GET /api/v1/ping` | Basic connectivity check |
+| `GET /api/v1/version` | Application version information |
+| `GET /metrics` | Prometheus metrics |
+| `GET /swagger/index.html` | Swagger UI |
+
+Business APIs are exposed under:
+
+```text
+/api/v1
+```
+
+Main modules:
+
+```text
+/auth
+/users
+/categories
+/products
+/inventory
+/orders
+/payments
+```
+
+For the complete request and response contract, use Swagger.
+
 ---
 
 # Swagger API Documentation
 
-Generate Swagger files:
-
-```bash
-swag init -g ./cmd/server/main.go --parseInternal --parseDependency
-```
-
-Open Swagger UI:
+Swagger UI:
 
 ```text
 http://localhost:8080/swagger/index.html
 ```
 
-Login using `/auth/login`, copy the JWT, click **Authorize**, and enter:
+Regenerate Swagger files after API annotation changes:
+
+```bash
+swag init -g ./cmd/server/main.go --parseInternal --parseDependency
+```
+
+For protected endpoints:
+
+1. Login using the authentication API.
+2. Copy the JWT token.
+3. Click **Authorize** in Swagger.
+4. Enter:
 
 ```text
 Bearer <your-jwt-token>
@@ -350,88 +524,228 @@ Bearer <your-jwt-token>
 
 ---
 
-# Razorpay Setup
+# Payment Testing
 
-1. Create a Razorpay Test Account.
-2. Generate Test API Keys.
-3. Add the keys to the `.env` file.
-4. Configure a Webhook in the Razorpay Dashboard.
-
-Webhook URL:
+The repository includes a simple local demo frontend:
 
 ```text
-https://<your-ngrok-url>/api/v1/payments/webhook
+payment-demo/
 ```
 
-Events to subscribe:
+Basic flow:
 
-* payment.captured
-* payment.failed
-* refund.created
+1. Start PostgreSQL and observability infrastructure.
+2. Start the backend.
+3. Register or use an existing user.
+4. Login and obtain a JWT.
+5. Create category/product/inventory data as required.
+6. Create an order.
+7. Create the payment flow.
+8. Open the local payment demo.
+9. Complete Razorpay checkout in Test Mode.
+10. Verify the payment and webhook processing.
 
-Copy the generated **Webhook Secret** into:
-
-```env
-RAZORPAY_WEBHOOK_SECRET=xxxxxxxxxxxxxxxx
-```
+The demo frontend is intended for local development and learning only.
 
 ---
 
-# Local Webhook Testing with ngrok
+# Razorpay Webhook Testing
 
-Since Razorpay cannot send webhooks to `localhost`, expose your local server using ngrok.
+Razorpay cannot deliver webhooks directly to `localhost`.
 
-Start ngrok:
+Expose the local application:
 
 ```bash
 ngrok http 8080
 ```
 
+Use the generated public URL in the Razorpay dashboard with the project's configured payment webhook endpoint.
+
 Example:
 
 ```text
-https://abcd-1234.ngrok-free.app
+https://<your-ngrok-domain>/<payment-webhook-path>
 ```
 
-Configure Razorpay Webhook:
+The application verifies Razorpay webhook signatures before processing webhook data.
+
+---
+
+# Observability
+
+The current observability pipeline is:
 
 ```text
-https://abcd-1234.ngrok-free.app/api/v1/payments/webhook
+Go Application
+    |
+    +--> Prometheus Metrics --> Prometheus --> Grafana
+    |
+    +--> OpenTelemetry Traces --> OTEL Collector --> Jaeger
+    |
+    +--> Structured Logs --> stdout
+```
+
+## Prometheus
+
+Prometheus:
+
+```text
+http://localhost:9090
+```
+
+The application exposes:
+
+```text
+http://localhost:8080/metrics
+```
+
+Prometheus is configured to scrape the API through:
+
+```text
+host.docker.internal:8080
+```
+
+This assumes the API is running on the host machine while Prometheus runs in Docker.
+
+## Grafana
+
+Grafana:
+
+```text
+http://localhost:3000
+```
+
+Current local credentials configured in `docker-compose.yml`:
+
+```text
+username: admin
+password: admin
+```
+
+Change these credentials before any non-local deployment.
+
+## Jaeger
+
+Jaeger UI:
+
+```text
+http://localhost:16686
+```
+
+See [documentation/OBSERVABILITY.md](documentation/OBSERVABILITY.md) for details.
+
+---
+
+# Testing
+
+The project contains:
+
+- Unit tests
+- Repository integration tests
+- Order service integration tests
+- HTTP end-to-end tests
+- Locust load-test scripts
+
+Run standard tests:
+
+```bash
+go test ./...
+```
+
+Run repository integration tests:
+
+```bash
+go test -tags=integration ./internal/repository
+```
+
+Run order service integration tests:
+
+```bash
+go test -tags=integration ./internal/modules/order
+```
+
+Run HTTP end-to-end tests:
+
+```bash
+go test -tags=e2e ./internal/test/e2e/...
+```
+
+See [documentation/TESTING.md](documentation/TESTING.md).
+
+---
+
+# CI Pipeline
+
+GitHub Actions runs on pushes to branches and pull requests.
+
+Current CI checks:
+
+```text
+Checkout
+    |
+    v
+Set up Go
+    |
+    v
+Verify formatting
+    |
+    v
+Build
+    |
+    v
+Unit tests
+    |
+    v
+Repository integration tests
+    |
+    v
+Order integration tests
+    |
+    v
+HTTP end-to-end tests
+```
+
+A PostgreSQL service container is provided to CI for database-dependent tests.
+
+---
+
+# Makefile Commands
+
+```bash
+make run
+make build
+make test
+make fmt
+make tidy
+make docker-up
+make docker-down
+make logs
+make clean
 ```
 
 ---
 
-# Payment Testing Flow
+# Load Testing
 
-1. Register/Login
-2. Copy JWT from `/auth/login`
-3. Authorize in Swagger
-4. Create User (if needed)
-5. Create Product
-6. Create Inventory
-7. Create Order
-8. Create Payment
-9. Complete Razorpay Checkout
-10. Razorpay sends Webhook
-11. Payment status updates automatically
-12. Order status changes to **PAID**
+Locust files are available in:
+
+```text
+locust/
+```
+
+They are intended to exercise the application under concurrent HTTP traffic and support performance experimentation during the observability phase.
 
 ---
 
-# Demo Frontend
+# Documentation
 
-A simple HTML + JavaScript demo frontend is included to test the complete payment flow.
+- [Architecture](documentation/ARCHITECTURE.md)
+- [Development Guide](documentation/DEVELOPMENT.md)
+- [Observability](documentation/OBSERVABILITY.md)
+- [Testing](documentation/TESTING.md)
+- [Roadmap](documentation/ROADMAP.md)
+- [Swagger API](docs/swagger.yaml)
 
-### Usage
-
-1. Start the backend server.
-2. Open `payment-demo/index.html` in your browser.
-3. Login using a registered user's credentials.
-4. Enter an Order ID and click **Pay Now**.
-5. Complete the payment using Razorpay Test Mode.
-6. If ngrok and the Razorpay webhook are configured, the payment and order status will be updated automatically.
-
-> **Note:** The demo frontend is intended for local development and testing only.
 ---
 
 # Author
@@ -440,6 +754,6 @@ A simple HTML + JavaScript demo frontend is included to test the complete paymen
 
 Associate Software Engineer | Cloud & Backend Development
 
-**GitHub:** https://github.com/khushidesai23
+GitHub: https://github.com/khushidesai23
 
-**LinkedIn:** https://www.linkedin.com/in/khushi-desai-ab5154225/
+LinkedIn: https://www.linkedin.com/in/khushi-desai-ab5154225/
