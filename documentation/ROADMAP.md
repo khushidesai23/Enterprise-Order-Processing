@@ -1,47 +1,81 @@
 # Project Roadmap
 
-## Phase 1 — Core Order Processing System
+This roadmap reflects the current implementation state.
 
-| Milestone |
-|-----------|
-| Project setup, Docker, configuration |
-| PostgreSQL integration, logging |
-| GORM setup, migrations, repository layer |
-| User module |
-| Category, Product & Inventory modules |
-| Order module (transactions & inventory reservation) |
-| JWT authentication & protected APIs |
-| Razorpay payment integration, checkout signature verification & webhook integration |
-| Payment workflow, transaction management, inventory lifecycle, Swagger documentation & testing |
+## Phase 1 - Core Order Processing
 
----
+### Completed
 
-## Phase 2 — Event-Driven Architecture
+- Project structure and configuration
+- Docker-based PostgreSQL
+- Structured logging
+- GORM models and migrations
+- Repository layer
+- Authentication and JWT
+- User management
+- Category management
+- Product management
+- Inventory management
+- Order processing
+- Transaction-safe inventory reservation
+- Razorpay integration
+- Checkout signature verification
+- Webhook signature verification
+- Idempotent payment webhook handling
+- Swagger documentation
+- Automated tests
 
-| Milestone |
-|-----------|
-| PostgreSQL Change Data Capture (CDC) |
-| Debezium Integration |
-| Apache Kafka Setup |
-| Event Publishing |
-| Notification Service |
-| Analytics Service |
-| Audit Service |
-| Event Consumers |
-| Event-Driven Communication |
+## Phase 2 - Event-Driven Architecture
 
----
+### Planned
 
-## Phase 3 — Monitoring & Observability
+- PostgreSQL logical replication preparation
+- Change Data Capture
+- Debezium
+- Kafka or equivalent event transport
+- Event schema/versioning strategy
+- Notification consumer
+- Analytics consumer
+- Audit/event consumer
+- Consumer idempotency
+- Retry and dead-letter strategy
 
-| Milestone |
-|-----------|
-| OpenTelemetry Integration |
-| Distributed Tracing |
-| Prometheus Metrics |
-| Grafana Dashboards |
-| Structured Logging |
-| Health & Readiness Checks |
-| API Monitoring |
-| Business Metrics |
-| Alerting & Observability |
+## Phase 3 - Observability
+
+### Implemented
+
+- OpenTelemetry initialization
+- OTLP collector
+- Jaeger tracing
+- Prometheus metrics endpoint
+- Prometheus scraping
+- Grafana provisioning
+- Health and readiness checks
+- Structured logging
+- Locust load-testing setup
+
+### Next Observability Work
+
+- Finalize Grafana dashboards
+- Add focused business metrics
+- Add database and dependency metrics where appropriate
+- Define alert conditions
+- Add SLO-oriented monitoring
+
+## Phase 4 - Time-Series and Data Lifecycle
+
+### Planned
+
+- TimescaleDB
+- Hypertables
+- Time-series operational analytics
+- Continuous aggregates where useful
+- Retention policies
+- Compression
+- Hot/warm/cold lifecycle strategy
+
+## Recommended Next Step
+
+Complete and validate the Prometheus/Grafana dashboard layer before introducing CDC infrastructure.
+
+The next major architectural phase should begin only after the current business workflows, tests, tracing, metrics, and dashboards are stable.
