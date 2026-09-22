@@ -1,4 +1,8 @@
 services:
+
+  # ============================================================
+  # PostgreSQL - Main Application Database
+  # ============================================================
   postgres:
     image: postgres:16
     container_name: order-postgres
@@ -25,11 +29,158 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DB_USER} -d ${DB_NAME}"
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
 
+
+  # ============================================================
+  # PostgreSQL - Test Database
+  # ============================================================
+  postgres-test:
+    image: postgres:16
+    container_name: order-postgres-test
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${TEST_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${TEST_DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${TEST_DB_NAME:-order_processing_test}
+
+    ports:
+      - "${TEST_DB_PORT:-5433}:5432"
+
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${TEST_DB_USER:-postgres} -d ${TEST_DB_NAME:-order_processing_test}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  # ============================================================
+  # Kafka - KRaft Mode
+  # ============================================================
+  kafka:
+    image: quay.io/debezium/kafka:3.2
+    container_name: order-kafka
+    restart: unless-stopped
+
+    environment:
+      # KRaft cluster configuration
+      CLUSTER_ID: "4L6g3nShT-eMCtK--X86sw"
+      NODE_ID: 1
+      NODE_ROLE: combined
+
+      # KRaft controller quorum
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+
+      # Kafka listeners
+      KAFKA_LISTENERS: "PLAINTEXT://kafka:9092,CONTROLLER://kafka:9093"
+
+      # IMPORTANT:
+      # Containers such as Debezium must resolve Kafka as "kafka"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+
+      # Single-node Kafka configuration
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+      # Faster startup for development
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+      # Default number of partitions
+      KAFKA_NUM_PARTITIONS: 3
+
+    ports:
+      - "9092:9092"
+
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list >/dev/null 2>&1"
+        ]
+      interval: 10s
+      timeout: 30s
+      retries: 10
+      start_period: 30s
+
+
+  # ============================================================
+  # Debezium Kafka Connect
+  # ============================================================
+  debezium:
+    image: quay.io/debezium/connect:3.2
+    container_name: order-debezium
+    restart: unless-stopped
+
+    environment:
+      # Kafka broker
+      BOOTSTRAP_SERVERS: kafka:9092
+
+      # Kafka Connect worker
+      GROUP_ID: 1
+
+      # Internal Kafka Connect topics
+      CONFIG_STORAGE_TOPIC: connect_configs
+      OFFSET_STORAGE_TOPIC: connect_offsets
+      STATUS_STORAGE_TOPIC: connect_status
+
+      # Single-node Kafka
+      CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      STATUS_STORAGE_REPLICATION_FACTOR: 1
+
+      # JSON converters
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+
+      KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+
+    ports:
+      - "8083:8083"
+
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+      postgres:
+        condition: service_healthy
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f http://localhost:8083/ >/dev/null 2>&1"
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+
+  # ============================================================
+  # Jaeger - Distributed Tracing
+  # ============================================================
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: order-jaeger
@@ -38,6 +189,10 @@ services:
     ports:
       - "16686:16686"
 
+
+  # ============================================================
+  # OpenTelemetry Collector
+  # ============================================================
   otel-collector:
     image: otel/opentelemetry-collector:latest
     container_name: order-otel-collector
@@ -56,28 +211,10 @@ services:
     depends_on:
       - jaeger
 
-  postgres-test:
-    image: postgres:16
-    container_name: order-postgres-test
-    restart: unless-stopped
 
-    environment:
-      POSTGRES_USER: ${TEST_DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${TEST_DB_PASSWORD:-postgres}
-      POSTGRES_DB: ${TEST_DB_NAME:-order_processing_test}
-
-    ports:
-      - "${TEST_DB_PORT:-5433}:5432"
-
-    volumes:
-      - postgres_test_data:/var/lib/postgresql/data
-
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${TEST_DB_USER:-postgres} -d ${TEST_DB_NAME:-order_processing_test}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
+  # ============================================================
+  # Prometheus
+  # ============================================================
   prometheus:
     image: prom/prometheus:latest
     container_name: order-prometheus
@@ -96,6 +233,10 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+
+  # ============================================================
+  # Grafana
+  # ============================================================
   grafana:
     image: grafana/grafana:latest
     container_name: order-grafana
@@ -115,8 +256,13 @@ services:
     depends_on:
       - prometheus
 
+
+# ==============================================================
+# Persistent Volumes
+# ==============================================================
 volumes:
   postgres_data:
   postgres_test_data:
+  kafka_data:
   prometheus_data:
   grafana_data:
