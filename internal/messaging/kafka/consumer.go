@@ -27,14 +27,14 @@ type DebeziumPayload struct {
 }
 
 type DebeziumSource struct {
-	Version      string `json:"version"`
-	Connector    string `json:"connector"`
-	Name         string `json:"name"`
-	Database     string `json:"db"`
-	Schema       string `json:"schema"`
-	Table        string `json:"table"`
-	Transaction  *int64 `json:"txId"`
-	LSN          *int64 `json:"lsn"`
+	Version     string `json:"version"`
+	Connector   string `json:"connector"`
+	Name        string `json:"name"`
+	Database    string `json:"db"`
+	Schema      string `json:"schema"`
+	Table       string `json:"table"`
+	Transaction *int64 `json:"txId"`
+	LSN         *int64 `json:"lsn"`
 }
 
 func NewConsumer(
