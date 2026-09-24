@@ -4,14 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 
 	"github.com/segmentio/kafka-go"
+	"go.uber.org/zap"
 )
 
 type Consumer struct {
 	reader *kafka.Reader
-	logger *slog.Logger
+	logger *zap.Logger
 }
 
 type DebeziumEvent struct {
@@ -37,10 +37,7 @@ type DebeziumSource struct {
 	LSN         *int64 `json:"lsn"`
 }
 
-func NewConsumer(
-	cfg Config,
-	logger *slog.Logger,
-) *Consumer {
+func NewConsumer(cfg Config, logger *zap.Logger) *Consumer {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:     cfg.Brokers,
 		GroupID:     cfg.GroupID,
@@ -58,17 +55,22 @@ func NewConsumer(
 }
 
 func (c *Consumer) Start(ctx context.Context) error {
+	c.logger.Info(
+		"Kafka CDC consumer started",
+		zap.String("topic", c.reader.Config().Topic),
+	)
+
 	for {
 		message, err := c.reader.ReadMessage(ctx)
 		if err != nil {
 			if ctx.Err() != nil {
+				c.logger.Info("Kafka CDC consumer stopped")
 				return ctx.Err()
 			}
 
 			c.logger.Error(
 				"failed to read Kafka message",
-				"error",
-				err,
+				zap.Error(err),
 			)
 
 			continue
@@ -79,14 +81,10 @@ func (c *Consumer) Start(ctx context.Context) error {
 		if err := json.Unmarshal(message.Value, &event); err != nil {
 			c.logger.Error(
 				"failed to decode Debezium event",
-				"error",
-				err,
-				"topic",
-				message.Topic,
-				"partition",
-				message.Partition,
-				"offset",
-				message.Offset,
+				zap.Error(err),
+				zap.String("topic", message.Topic),
+				zap.Int("partition", message.Partition),
+				zap.Int64("offset", message.Offset),
 			)
 
 			continue
@@ -94,23 +92,17 @@ func (c *Consumer) Start(ctx context.Context) error {
 
 		c.logger.Info(
 			"CDC event received",
-			"topic",
-			message.Topic,
-			"partition",
-			message.Partition,
-			"offset",
-			message.Offset,
-			"operation",
-			event.Payload.Operation,
-			"table",
-			event.Payload.Source.Table,
+			zap.String("topic", message.Topic),
+			zap.Int("partition", message.Partition),
+			zap.Int64("offset", message.Offset),
+			zap.String("operation", event.Payload.Operation),
+			zap.String("table", event.Payload.Source.Table),
 		)
 
 		if err := c.processEvent(ctx, event); err != nil {
 			c.logger.Error(
 				"failed to process CDC event",
-				"error",
-				err,
+				zap.Error(err),
 			)
 		}
 	}
@@ -144,8 +136,7 @@ func (c *Consumer) processEvent(
 func (c *Consumer) handleCreate(event DebeziumEvent) error {
 	c.logger.Info(
 		"CDC CREATE event",
-		"table",
-		event.Payload.Source.Table,
+		zap.String("table", event.Payload.Source.Table),
 	)
 
 	return nil
@@ -154,8 +145,7 @@ func (c *Consumer) handleCreate(event DebeziumEvent) error {
 func (c *Consumer) handleUpdate(event DebeziumEvent) error {
 	c.logger.Info(
 		"CDC UPDATE event",
-		"table",
-		event.Payload.Source.Table,
+		zap.String("table", event.Payload.Source.Table),
 	)
 
 	return nil
@@ -164,8 +154,7 @@ func (c *Consumer) handleUpdate(event DebeziumEvent) error {
 func (c *Consumer) handleDelete(event DebeziumEvent) error {
 	c.logger.Info(
 		"CDC DELETE event",
-		"table",
-		event.Payload.Source.Table,
+		zap.String("table", event.Payload.Source.Table),
 	)
 
 	return nil
@@ -174,8 +163,7 @@ func (c *Consumer) handleDelete(event DebeziumEvent) error {
 func (c *Consumer) handleSnapshot(event DebeziumEvent) error {
 	c.logger.Info(
 		"CDC SNAPSHOT event",
-		"table",
-		event.Payload.Source.Table,
+		zap.String("table", event.Payload.Source.Table),
 	)
 
 	return nil

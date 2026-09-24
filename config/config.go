@@ -37,6 +37,13 @@ type Config struct {
 	OTelServiceVersion   string
 	OTelEnvironment      string
 	OTelExporterEndpoint string
+
+	KafkaBrokers    []string
+	KafkaCDCGroupID string
+	KafkaCDCTopic   string
+	KafkaMinBytes   int
+	KafkaMaxBytes   int
+	KafkaMaxWait    time.Duration
 }
 
 func Load() (*Config, error) {
@@ -75,6 +82,15 @@ func Load() (*Config, error) {
 		OTelServiceVersion:   viper.GetString("OTEL_SERVICE_VERSION"),
 		OTelEnvironment:      viper.GetString("OTEL_ENVIRONMENT"),
 		OTelExporterEndpoint: viper.GetString("OTEL_EXPORTER_OTLP_ENDPOINT"),
+
+		KafkaBrokers: strings.Split(viper.GetString("KAFKA_BROKERS"), ","),
+		KafkaCDCGroupID: viper.GetString("KAFKA_CDC_GROUP_ID"),
+		KafkaCDCTopic:   viper.GetString("KAFKA_CDC_TOPIC"),
+		KafkaMinBytes:   viper.GetInt("KAFKA_MIN_BYTES"),
+		KafkaMaxBytes:   viper.GetInt("KAFKA_MAX_BYTES"),
+		KafkaMaxWait: mustParseDuration(
+			viper.GetString("KAFKA_MAX_WAIT"),
+		),
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -124,6 +140,19 @@ func setDefaults() {
 		"OTEL_EXPORTER_OTLP_ENDPOINT",
 		"localhost:4317",
 	)
+
+	viper.SetDefault("KAFKA_BROKERS", []string{"localhost:9092"})
+	viper.SetDefault(
+		"KAFKA_CDC_GROUP_ID",
+		"order-processing-cdc-consumer",
+	)
+	viper.SetDefault(
+		"KAFKA_CDC_TOPIC",
+		"order-processing.public.categories",
+	)
+	viper.SetDefault("KAFKA_MIN_BYTES", 1)
+	viper.SetDefault("KAFKA_MAX_BYTES", 10e6)
+	viper.SetDefault("KAFKA_MAX_WAIT", "1s")
 }
 
 func (c *Config) Validate() error {
@@ -171,6 +200,31 @@ func (c *Config) Validate() error {
 	if strings.TrimSpace(c.LogLevel) == "" {
 		return errors.New("LOG_LEVEL is required")
 	}
+
+	if len(c.KafkaBrokers) == 0 {
+		return errors.New("KAFKA_BROKERS is required")
+	}
+
+	if strings.TrimSpace(c.KafkaCDCGroupID) == "" {
+		return errors.New("KAFKA_CDC_GROUP_ID is required")
+	}
+
+	if strings.TrimSpace(c.KafkaCDCTopic) == "" {
+		return errors.New("KAFKA_CDC_TOPIC is required")
+	}
+
+	if c.KafkaMinBytes <= 0 {
+		return errors.New("KAFKA_MIN_BYTES must be greater than 0")
+	}
+
+	if c.KafkaMaxBytes <= 0 {
+		return errors.New("KAFKA_MAX_BYTES must be greater than 0")
+	}
+
+	if c.KafkaMaxWait <= 0 {
+		return errors.New("KAFKA_MAX_WAIT must be greater than 0")
+	}
+
 	return nil
 }
 
