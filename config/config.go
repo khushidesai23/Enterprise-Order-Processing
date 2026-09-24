@@ -83,7 +83,7 @@ func Load() (*Config, error) {
 		OTelEnvironment:      viper.GetString("OTEL_ENVIRONMENT"),
 		OTelExporterEndpoint: viper.GetString("OTEL_EXPORTER_OTLP_ENDPOINT"),
 
-		KafkaBrokers: strings.Split(viper.GetString("KAFKA_BROKERS"), ","),
+		KafkaBrokers:    strings.Split(viper.GetString("KAFKA_BROKERS"), ","),
 		KafkaCDCGroupID: viper.GetString("KAFKA_CDC_GROUP_ID"),
 		KafkaCDCTopic:   viper.GetString("KAFKA_CDC_TOPIC"),
 		KafkaMinBytes:   viper.GetInt("KAFKA_MIN_BYTES"),
