@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/segmentio/kafka-go"
 	"go.uber.org/zap"
@@ -55,6 +56,9 @@ func NewConsumer(cfg Config, logger *zap.Logger) *Consumer {
 }
 
 func (c *Consumer) Start(ctx context.Context) error {
+	const maxRetryDelay = 30 * time.Second
+	retryDelay := time.Second
+
 	c.logger.Info(
 		"Kafka CDC consumer started",
 		zap.String("topic", c.reader.Config().Topic),
@@ -71,10 +75,27 @@ func (c *Consumer) Start(ctx context.Context) error {
 			c.logger.Error(
 				"failed to read Kafka message",
 				zap.Error(err),
+				zap.Duration("retry_in", retryDelay),
 			)
 
+			timer := time.NewTimer(retryDelay)
+			select {
+			case <-ctx.Done():
+				if !timer.Stop() {
+					<-timer.C
+				}
+				c.logger.Info("Kafka CDC consumer stopped")
+				return ctx.Err()
+			case <-timer.C:
+			}
+
+			retryDelay *= 2
+			if retryDelay > maxRetryDelay {
+				retryDelay = maxRetryDelay
+			}
 			continue
 		}
+		retryDelay = time.Second
 
 		var event DebeziumEvent
 
