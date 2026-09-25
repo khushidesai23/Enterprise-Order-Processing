@@ -83,7 +83,9 @@ func Load() (*Config, error) {
 		OTelEnvironment:      viper.GetString("OTEL_ENVIRONMENT"),
 		OTelExporterEndpoint: viper.GetString("OTEL_EXPORTER_OTLP_ENDPOINT"),
 
-		KafkaBrokers:    strings.Split(viper.GetString("KAFKA_BROKERS"), ","),
+		KafkaBrokers: parseKafkaBrokers(
+			viper.GetString("KAFKA_BROKERS"),
+		),
 		KafkaCDCGroupID: viper.GetString("KAFKA_CDC_GROUP_ID"),
 		KafkaCDCTopic:   viper.GetString("KAFKA_CDC_TOPIC"),
 		KafkaMinBytes:   viper.GetInt("KAFKA_MIN_BYTES"),
@@ -300,4 +302,20 @@ func mustParseDuration(value string) time.Duration {
 		return 0
 	}
 	return d
+}
+
+func parseKafkaBrokers(value string) []string {
+	parts := strings.Split(value, ",")
+
+	brokers := make([]string, 0, len(parts))
+
+	for _, part := range parts {
+		broker := strings.TrimSpace(part)
+
+		if broker != "" {
+			brokers = append(brokers, broker)
+		}
+	}
+
+	return brokers
 }
