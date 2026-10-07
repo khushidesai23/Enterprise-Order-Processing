@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -26,13 +27,13 @@ import (
 	_ "github.com/khushidesai23/Enterprise-Order-Processing/docs"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/app"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/database"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/messaging/kafka"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/metrics"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/telemetry"
 )
 
 func main() {
-
 	ctx := context.Background()
 
 	// Load Configuration
@@ -41,7 +42,7 @@ func main() {
 		panic(err)
 	}
 
-	// Register Prometheus metrics
+	// Register Prometheus Metrics
 	metrics.Register()
 
 	// Initialize OpenTelemetry
@@ -95,29 +96,82 @@ func main() {
 	// Database
 	db, err := database.New(cfg)
 	if err != nil {
-		log.Fatal("database connection failed", zap.Error(err))
+		log.Fatal(
+			"database connection failed",
+			zap.Error(err),
+		)
 	}
 
 	defer func() {
 		if err := db.Close(); err != nil {
-			log.Error("failed to close database", zap.Error(err))
+			log.Error(
+				"failed to close database",
+				zap.Error(err),
+			)
 		}
 	}()
 
 	// Auto Migration
 	if err := db.AutoMigrate(); err != nil {
-		log.Fatal("database migration failed", zap.Error(err))
+		log.Fatal(
+			"database migration failed",
+			zap.Error(err),
+		)
 	}
 
 	log.Info("database migration completed")
 
-	router, err := app.NewRouter(app.RouterOptions{
-		Config:   cfg,
-		Database: db,
-		Logger:   log,
-	})
+	// Kafka CDC Consumer
+	kafkaConsumer := kafka.NewConsumer(
+		kafka.Config{
+			Brokers:  cfg.KafkaBrokers,
+			GroupID:  cfg.KafkaCDCGroupID,
+			Topic:    cfg.KafkaCDCTopic,
+			MinBytes: cfg.KafkaMinBytes,
+			MaxBytes: cfg.KafkaMaxBytes,
+			MaxWait:  cfg.KafkaMaxWait,
+		},
+		log,
+	)
+
+	// Create a dedicated context for the Kafka consumer.
+	kafkaCtx, kafkaCancel := context.WithCancel(
+		context.Background(),
+	)
+	defer kafkaCancel()
+
+	// WaitGroup ensures the Kafka consumer exits
+	// before the application completely shuts down.
+	var kafkaWG sync.WaitGroup
+
+	kafkaWG.Add(1)
+
+	go func() {
+		defer kafkaWG.Done()
+
+		if err := kafkaConsumer.Start(kafkaCtx); err != nil &&
+			!errors.Is(err, context.Canceled) {
+
+			log.Error(
+				"Kafka CDC consumer stopped with error",
+				zap.Error(err),
+			)
+		}
+	}()
+
+	// HTTP Router
+	router, err := app.NewRouter(
+		app.RouterOptions{
+			Config:   cfg,
+			Database: db,
+			Logger:   log,
+		},
+	)
 	if err != nil {
-		log.Fatal("router initialization failed", zap.Error(err))
+		log.Fatal(
+			"router initialization failed",
+			zap.Error(err),
+		)
 	}
 
 	// HTTP Server
@@ -130,9 +184,8 @@ func main() {
 		IdleTimeout:       60 * time.Second,
 	}
 
-	// Start Server
+	// Start HTTP Server
 	go func() {
-
 		log.Info(
 			"starting server",
 			zap.String("application", cfg.AppName),
@@ -143,7 +196,10 @@ func main() {
 		if err := server.ListenAndServe(); err != nil &&
 			!errors.Is(err, http.ErrServerClosed) {
 
-			log.Fatal("server crashed", zap.Error(err))
+			log.Fatal(
+				"server crashed",
+				zap.Error(err),
+			)
 		}
 	}()
 
@@ -160,14 +216,33 @@ func main() {
 
 	log.Info("shutdown signal received")
 
-	ctx, cancel := context.WithTimeout(
+	// Stop Kafka CDC Consumer
+	kafkaCancel()
+
+	if err := kafkaConsumer.Close(); err != nil {
+		log.Error(
+			"failed to close Kafka consumer",
+			zap.Error(err),
+		)
+	}
+
+	// Wait for Kafka consumer goroutine to finish.
+	kafkaWG.Wait()
+
+	log.Info("Kafka CDC consumer stopped")
+
+	// Shutdown HTTP Server
+	shutdownCtx, cancel := context.WithTimeout(
 		context.Background(),
 		10*time.Second,
 	)
 	defer cancel()
 
-	if err := server.Shutdown(ctx); err != nil {
-		log.Error("server shutdown failed", zap.Error(err))
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Error(
+			"server shutdown failed",
+			zap.Error(err),
+		)
 	}
 
 	log.Info("server stopped gracefully")
