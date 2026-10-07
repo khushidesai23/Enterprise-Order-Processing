@@ -1,0 +1,38 @@
+{
+  "name": "order-processing-postgres-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "cdc_user",
+    "database.password": "cdc_password",
+    "database.dbname": "order_processing",
+
+    "topic.prefix": "order-processing",
+
+    "plugin.name": "pgoutput",
+
+    "slot.name": "order_processing_cdc_slot",
+    "publication.name": "order_processing_cdc",
+    "publication.autocreate.mode": "disabled",
+
+    "snapshot.mode": "initial",
+
+    "schema.include.list": "public",
+
+    "table.include.list": "public.users,public.categories,public.products,public.inventories,public.orders,public.order_items,public.payments,public.payment_webhooks",
+
+    "include.schema.changes": "false",
+
+    "decimal.handling.mode": "double",
+
+    "time.precision.mode": "adaptive",
+
+    "tombstones.on.delete": "false",
+
+    "heartbeat.interval.ms": "10000",
+
+    "tasks.max": "1"
+  }
+}
