@@ -133,6 +133,11 @@ func main() {
 		},
 		log,
 	)
+	log.Info(
+		"configured Kafka CDC consumer",
+		zap.Strings("brokers", cfg.KafkaBrokers),
+		zap.String("topic", cfg.KafkaCDCTopic),
+	)
 
 	// Create a dedicated context for the Kafka consumer.
 	kafkaCtx, kafkaCancel := context.WithCancel(
