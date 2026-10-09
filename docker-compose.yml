@@ -185,9 +185,14 @@ services:
   # Jaeger - Distributed Tracing
   # ============================================================
   jaeger:
-    image: jaegertracing/all-in-one:latest
+    image: jaegertracing/all-in-one:1.76.0
     container_name: order-jaeger
     restart: unless-stopped
+
+    environment:
+      # The in-memory store is otherwise unbounded; after the load tests it
+      # held 3 GiB of the Docker VM's memory. Oldest traces are evicted.
+      MEMORY_MAX_TRACES: "50000"
 
     ports:
       - "16686:16686"
@@ -197,7 +202,7 @@ services:
   # OpenTelemetry Collector
   # ============================================================
   otel-collector:
-    image: otel/opentelemetry-collector:latest
+    image: otel/opentelemetry-collector:0.158.0
     container_name: order-otel-collector
     restart: unless-stopped
 
@@ -219,7 +224,7 @@ services:
   # Prometheus
   # ============================================================
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.11.3
     container_name: order-prometheus
     restart: unless-stopped
 
@@ -241,7 +246,7 @@ services:
   # Grafana
   # ============================================================
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:13.0.1-security-01
     container_name: order-grafana
     restart: unless-stopped
 
