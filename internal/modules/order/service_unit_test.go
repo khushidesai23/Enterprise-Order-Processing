@@ -59,10 +59,6 @@ func (m *orderRepositoryMock) GetByUserIDPage(ctx context.Context, userID uuid.U
 	return orders, args.Error(1)
 }
 
-func (m *orderRepositoryMock) UpdateTotalAmount(ctx context.Context, tx *gorm.DB, id uuid.UUID, total float64) error {
-	return m.Called(ctx, tx, id, total).Error(0)
-}
-
 func (m *orderRepositoryMock) UpdateStatusTx(ctx context.Context, tx *gorm.DB, id uuid.UUID, status models.OrderStatus) error {
 	return m.Called(ctx, tx, id, status).Error(0)
 }
@@ -79,14 +75,19 @@ type orderProductRepositoryMock struct {
 	mock.Mock
 }
 
-func (m *orderProductRepositoryMock) GetByID(ctx context.Context, id uuid.UUID) (*models.Product, error) {
-	args := m.Called(ctx, id)
-	product, _ := args.Get(0).(*models.Product)
-	return product, args.Error(1)
+func (m *orderProductRepositoryMock) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]models.Product, error) {
+	args := m.Called(ctx, ids)
+	products, _ := args.Get(0).([]models.Product)
+	return products, args.Error(1)
 }
 
 type orderInventoryRepositoryMock struct {
 	mock.Mock
+}
+
+func (m *orderInventoryRepositoryMock) ExistsByProductID(ctx context.Context, productID uuid.UUID) (bool, error) {
+	args := m.Called(ctx, productID)
+	return args.Bool(0), args.Error(1)
 }
 
 func (m *orderInventoryRepositoryMock) GetByProductIDTx(ctx context.Context, tx *gorm.DB, productID uuid.UUID) (*models.Inventory, error) {

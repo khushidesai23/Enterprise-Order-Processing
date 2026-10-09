@@ -32,7 +32,6 @@ type orderRepository interface {
 	GetAll(ctx context.Context, limit, offset int) ([]models.Order, error)
 	GetByUserID(ctx context.Context, userID uuid.UUID) ([]models.Order, error)
 	GetByUserIDPage(ctx context.Context, userID uuid.UUID, limit, offset int) ([]models.Order, error)
-	UpdateTotalAmount(ctx context.Context, tx *gorm.DB, id uuid.UUID, total float64) error
 	UpdateStatusTx(ctx context.Context, tx *gorm.DB, id uuid.UUID, status models.OrderStatus) error
 }
 
@@ -41,10 +40,11 @@ type orderItemRepository interface {
 }
 
 type orderProductRepository interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*models.Product, error)
+	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]models.Product, error)
 }
 
 type orderInventoryRepository interface {
+	ExistsByProductID(ctx context.Context, productID uuid.UUID) (bool, error)
 	GetByProductIDTx(ctx context.Context, tx *gorm.DB, productID uuid.UUID) (*models.Inventory, error)
 	ReserveStockTx(ctx context.Context, tx *gorm.DB, productID uuid.UUID, quantity int) error
 	ReleaseReservedStockTx(ctx context.Context, tx *gorm.DB, productID uuid.UUID, quantity int) error
@@ -73,6 +73,10 @@ func NewService(
 }
 
 // CreateOrder creates a new order and reserves inventory in one transaction.
+//
+// Reads that need no lock (user, product prices) happen before the
+// transaction, and the response is built from the rows just written, so the
+// transaction holds inventory row locks only for the writes themselves.
 func (s *Service) CreateOrder(
 	ctx context.Context,
 	req CreateOrderRequest,
@@ -93,6 +97,59 @@ func (s *Service) CreateOrder(
 		return bytes.Compare(a.ProductID[:], b.ProductID[:])
 	})
 
+	user, err := s.userRepository.GetByID(
+		ctx,
+		req.UserID,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if user == nil {
+		return nil, ErrUserNotFound
+	}
+
+	productIDs := make([]uuid.UUID, len(items))
+	for i, item := range items {
+		productIDs[i] = item.ProductID
+	}
+
+	products, err := s.productRepository.GetByIDs(
+		ctx,
+		productIDs,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	productsByID := make(map[uuid.UUID]models.Product, len(products))
+	for _, product := range products {
+		productsByID[product.ID] = product
+	}
+
+	order := ToOrderModel(req)
+	orderItems := make([]models.OrderItem, 0, len(items))
+
+	for _, requestItem := range items {
+
+		product, ok := productsByID[requestItem.ProductID]
+		if !ok {
+			return nil, ErrProductNotFound
+		}
+
+		orderItem := BuildOrderItem(
+			uuid.Nil,
+			product.ID,
+			requestItem.Quantity,
+			product.Price,
+		)
+
+		orderItems = append(orderItems, *orderItem)
+
+		order.TotalAmount += product.Price *
+			float64(requestItem.Quantity)
+	}
+
 	tx := s.orderRepository.Begin(ctx)
 
 	if tx.Error != nil {
@@ -100,23 +157,6 @@ func (s *Service) CreateOrder(
 	}
 
 	defer rollbackOnPanic(tx)
-
-	user, err := s.userRepository.GetByIDTx(
-		ctx,
-		tx,
-		req.UserID,
-	)
-	if err != nil {
-		tx.Rollback()
-		return nil, err
-	}
-
-	if user == nil {
-		tx.Rollback()
-		return nil, ErrUserNotFound
-	}
-
-	order := ToOrderModel(req)
 
 	if err := s.orderRepository.Create(
 		ctx,
@@ -127,80 +167,30 @@ func (s *Service) CreateOrder(
 		return nil, err
 	}
 
-	var (
-		orderItems []models.OrderItem
-		total      float64
-	)
+	for i := range orderItems {
 
-	for _, requestItem := range items {
+		orderItems[i].OrderID = order.ID
 
-		product, err := s.productRepository.GetByID(
-			ctx,
-			requestItem.ProductID,
-		)
-		if err != nil {
-
-			tx.Rollback()
-
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, ErrProductNotFound
-			}
-
-			return nil, err
-		}
-
-		inventory, err := s.inventoryRepository.GetByProductIDTx(
+		// The guarded UPDATE locks the inventory row and checks stock in
+		// one statement.
+		err := s.inventoryRepository.ReserveStockTx(
 			ctx,
 			tx,
-			requestItem.ProductID,
+			orderItems[i].ProductID,
+			orderItems[i].Quantity,
 		)
 		if err != nil {
-
 			tx.Rollback()
 
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, ErrInventoryNotFound
-			}
-
-			return nil, err
-		}
-
-		if inventory.AvailableQuantity < requestItem.Quantity {
-			tx.Rollback()
-			return nil, ErrInsufficientStock
-		}
-
-		if err := s.inventoryRepository.ReserveStockTx(
-			ctx,
-			tx,
-			requestItem.ProductID,
-			requestItem.Quantity,
-		); err != nil {
-
-			tx.Rollback()
 			if errors.Is(err, repository.ErrInsufficientQuantity) {
-
-				return nil, ErrInsufficientStock
-
+				return nil, s.missingInventoryOrInsufficientStock(
+					ctx,
+					orderItems[i].ProductID,
+				)
 			}
 
 			return nil, err
 		}
-
-		orderItem := BuildOrderItem(
-			order.ID,
-			product.ID,
-			requestItem.Quantity,
-			product.Price,
-		)
-
-		orderItems = append(
-			orderItems,
-			*orderItem,
-		)
-
-		total += product.Price *
-			float64(requestItem.Quantity)
 	}
 
 	if err := s.orderItemRepository.CreateMany(
@@ -213,31 +203,17 @@ func (s *Service) CreateOrder(
 		return nil, err
 	}
 
-	if err := s.orderRepository.UpdateTotalAmount(
-		ctx,
-		tx,
-		order.ID,
-		total,
-	); err != nil {
-
-		tx.Rollback()
-		return nil, err
-	}
-
-	order.TotalAmount = total
-
 	if err := tx.Commit().Error; err != nil {
 		tx.Rollback()
 		return nil, err
 	}
 
-	order, err = s.orderRepository.GetByID(
-		ctx,
-		order.ID,
-	)
-	if err != nil {
-		return nil, err
+	// Attach products only after the insert: GORM would otherwise upsert
+	// the association and BaseModel.BeforeCreate would re-ID it.
+	for i := range orderItems {
+		orderItems[i].Product = productsByID[orderItems[i].ProductID]
 	}
+	order.Items = orderItems
 
 	logger.InfoContext(
 		ctx,
@@ -251,6 +227,25 @@ func (s *Service) CreateOrder(
 	response := ToOrderResponse(order)
 
 	return &response, nil
+}
+
+// missingInventoryOrInsufficientStock distinguishes the two reasons a
+// guarded reservation can match no row. It only runs on the failure path.
+func (s *Service) missingInventoryOrInsufficientStock(
+	ctx context.Context,
+	productID uuid.UUID,
+) error {
+
+	exists, err := s.inventoryRepository.ExistsByProductID(ctx, productID)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		return ErrInventoryNotFound
+	}
+
+	return ErrInsufficientStock
 }
 
 // GetOrder returns a single order by its ID.
