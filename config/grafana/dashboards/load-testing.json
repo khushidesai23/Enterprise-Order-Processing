@@ -1,42 +1,1526 @@
 {
   "uid": "order-processing-load-testing",
   "title": "Order Processing - Load Testing",
-  "tags": ["order-processing", "load-testing"],
-  "timezone": "browser",
-  "schemaVersion": 39,
-  "refresh": "15s",
-  "time": { "from": "now-1h", "to": "now" },
-  "templating": { "list": [
-    { "name": "route", "type": "query", "label": "Route", "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "query": "label_values(order_processing_http_requests_total, route)", "includeAll": true, "allValue": ".*", "refresh": 1, "current": { "text": "All", "value": ".*" } },
-    { "name": "method", "type": "query", "label": "Method", "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "query": "label_values(order_processing_http_requests_total, method)", "includeAll": true, "allValue": ".*", "refresh": 1, "current": { "text": "All", "value": ".*" } },
-    { "name": "status", "type": "query", "label": "Status", "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "query": "label_values(order_processing_http_requests_total, status)", "includeAll": true, "allValue": ".*", "refresh": 1, "current": { "text": "All", "value": ".*" } }
-  ] },
-  "panels": [
-    { "id": 1, "type": "row", "title": "Traffic", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }, "collapsed": false, "panels": [] },
-    { "id": 2, "type": "timeseries", "title": "Request Rate", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 1 }, "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "targets": [{ "expr": "sum(rate(order_processing_http_requests_total{route=~\"$route\",method=~\"$method\",status=~\"$status\"}[1m]))", "legendFormat": "requests/sec", "refId": "A" }] },
-    { "id": 3, "type": "timeseries", "title": "Requests by Route", "gridPos": { "h": 8, "w": 8, "x": 8, "y": 1 }, "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "targets": [{ "expr": "sum by (route) (rate(order_processing_http_requests_total{route=~\"$route\",method=~\"$method\",status=~\"$status\"}[1m]))", "legendFormat": "{{route}}", "refId": "A" }] },
-    { "id": 4, "type": "timeseries", "title": "Requests by HTTP Status", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 1 }, "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "targets": [{ "expr": "sum by (status) (rate(order_processing_http_requests_total{route=~\"$route\",method=~\"$method\",status=~\"$status\"}[1m]))", "legendFormat": "{{status}}", "refId": "A" }] },
-    { "id": 5, "type": "row", "title": "Latency", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 }, "collapsed": false, "panels": [] },
-    { "id": 6, "type": "timeseries", "title": "P50 / P95 / P99 (seconds)", "gridPos": { "h": 8, "w": 24, "x": 0, "y": 10 }, "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "targets": [
-      { "expr": "histogram_quantile(0.50, sum by (le) (rate(order_processing_http_request_duration_seconds_bucket{route=~\"$route\",method=~\"$method\",status=~\"$status\"}[5m])))", "legendFormat": "P50", "refId": "A" },
-      { "expr": "histogram_quantile(0.95, sum by (le) (rate(order_processing_http_request_duration_seconds_bucket{route=~\"$route\",method=~\"$method\",status=~\"$status\"}[5m])))", "legendFormat": "P95", "refId": "B" },
-      { "expr": "histogram_quantile(0.99, sum by (le) (rate(order_processing_http_request_duration_seconds_bucket{route=~\"$route\",method=~\"$method\",status=~\"$status\"}[5m])))", "legendFormat": "P99", "refId": "C" }
-    ] },
-    { "id": 7, "type": "row", "title": "Errors", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 }, "collapsed": false, "panels": [] },
-    { "id": 8, "type": "timeseries", "title": "Error Rate (5xx / sec)", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 19 }, "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "targets": [{ "expr": "sum(rate(order_processing_http_requests_total{status=~\"5..\",route=~\"$route\",method=~\"$method\"}[1m]))", "legendFormat": "5xx/sec", "refId": "A" }] },
-    { "id": 9, "type": "timeseries", "title": "4xx Rate", "gridPos": { "h": 8, "w": 8, "x": 8, "y": 19 }, "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "targets": [{ "expr": "sum(rate(order_processing_http_requests_total{status=~\"4..\",route=~\"$route\",method=~\"$method\"}[1m]))", "legendFormat": "4xx/sec", "refId": "A" }] },
-    { "id": 10, "type": "timeseries", "title": "5xx Error Percentage", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 19 }, "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "targets": [{ "expr": "100 * sum(rate(order_processing_http_requests_total{status=~\"5..\",route=~\"$route\",method=~\"$method\"}[1m])) / clamp_min(sum(rate(order_processing_http_requests_total{route=~\"$route\",method=~\"$method\",status=~\"$status\"}[1m])), 1e-9)", "legendFormat": "5xx %", "refId": "A" }] },
-    { "id": 11, "type": "row", "title": "Go Runtime", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 27 }, "collapsed": false, "panels": [] },
-    { "id": 12, "type": "timeseries", "title": "Process CPU (cores)", "gridPos": { "h": 8, "w": 6, "x": 0, "y": 28 }, "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "targets": [{ "expr": "rate(process_cpu_seconds_total[1m])", "legendFormat": "CPU", "refId": "A" }] },
-    { "id": 13, "type": "timeseries", "title": "Memory", "gridPos": { "h": 8, "w": 6, "x": 6, "y": 28 }, "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "targets": [{ "expr": "go_memstats_heap_alloc_bytes", "legendFormat": "Heap allocated", "refId": "A" }, { "expr": "process_resident_memory_bytes", "legendFormat": "RSS", "refId": "B" }] },
-    { "id": 14, "type": "timeseries", "title": "Goroutines", "gridPos": { "h": 8, "w": 6, "x": 12, "y": 28 }, "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "targets": [{ "expr": "go_goroutines", "legendFormat": "goroutines", "refId": "A" }] },
-    { "id": 15, "type": "timeseries", "title": "In-flight Requests", "gridPos": { "h": 8, "w": 6, "x": 18, "y": 28 }, "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "targets": [{ "expr": "sum(order_processing_http_requests_in_flight{route=~\"$route\",method=~\"$method\"})", "legendFormat": "requests", "refId": "A" }] },
-    { "id": 16, "type": "row", "title": "Database Pool", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 36 }, "collapsed": false, "panels": [] },
-    { "id": 17, "type": "timeseries", "title": "DB Open / In-use / Idle Connections", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 37 }, "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "targets": [{ "expr": "order_processing_db_open_connections", "legendFormat": "Open", "refId": "A" }, { "expr": "order_processing_db_in_use_connections", "legendFormat": "In-use", "refId": "B" }, { "expr": "order_processing_db_idle_connections", "legendFormat": "Idle", "refId": "C" }] },
-    { "id": 18, "type": "timeseries", "title": "DB Wait Count (total increase / sec)", "gridPos": { "h": 8, "w": 6, "x": 12, "y": 37 }, "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "targets": [{ "expr": "rate(order_processing_db_wait_count_total[1m])", "legendFormat": "waits/sec", "refId": "A" }] },
-    { "id": 19, "type": "timeseries", "title": "DB Wait Duration (seconds / sec)", "gridPos": { "h": 8, "w": 6, "x": 18, "y": 37 }, "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }, "targets": [{ "expr": "rate(order_processing_db_wait_duration_seconds_total[1m])", "legendFormat": "wait seconds/sec", "refId": "A" }] },
-    { "id": 20, "type": "row", "title": "CDC / Event System", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 45 }, "collapsed": false, "panels": [] },
-    { "id": 21, "type": "text", "title": "CDC metrics unavailable", "gridPos": { "h": 4, "w": 24, "x": 0, "y": 46 }, "options": { "mode": "markdown", "content": "The repository does not currently expose Kafka, Debezium, consumer throughput, or consumer lag metrics. No CDC panels are fabricated. See LOAD_TESTING.md for the current pipeline limitations." } }
+  "tags": [
+    "load-testing",
+    "order-processing"
   ],
-  "annotations": { "list": [] }
+  "timezone": "browser",
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 2,
+  "refresh": "5s",
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m"
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "route",
+        "label": "Route",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
+        "query": {
+          "query": "label_values(order_processing_http_requests_total{job=\"order-processing-api\"}, route)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery",
+          "qryType": 1
+        },
+        "definition": "label_values(order_processing_http_requests_total{job=\"order-processing-api\"}, route)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "sort": 1
+      },
+      {
+        "name": "method",
+        "label": "Method",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
+        "query": {
+          "query": "label_values(order_processing_http_requests_total{job=\"order-processing-api\"}, method)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery",
+          "qryType": 1
+        },
+        "definition": "label_values(order_processing_http_requests_total{job=\"order-processing-api\"}, method)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "sort": 1
+      },
+      {
+        "name": "status",
+        "label": "Status",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
+        "query": {
+          "query": "label_values(order_processing_http_requests_total{job=\"order-processing-api\"}, status)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery",
+          "qryType": 1
+        },
+        "definition": "label_values(order_processing_http_requests_total{job=\"order-processing-api\"}, status)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "sort": 1
+      },
+      {
+        "name": "slow_threshold",
+        "label": "Slow trace threshold",
+        "type": "custom",
+        "query": "100ms,250ms,500ms,1s,2s",
+        "current": {
+          "selected": true,
+          "text": "250ms",
+          "value": "250ms"
+        },
+        "options": [
+          {
+            "selected": false,
+            "text": "100ms",
+            "value": "100ms"
+          },
+          {
+            "selected": true,
+            "text": "250ms",
+            "value": "250ms"
+          },
+          {
+            "selected": false,
+            "text": "500ms",
+            "value": "500ms"
+          },
+          {
+            "selected": false,
+            "text": "1s",
+            "value": "1s"
+          },
+          {
+            "selected": false,
+            "text": "2s",
+            "value": "2s"
+          }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "id": 1,
+      "title": "Load generator (Locust)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 2,
+      "title": "Locust users",
+      "description": "Simulated users reported by the Locust exporter in locust/scenarios/common.py. Empty when Locust is not running.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "sum(locust_users)",
+          "legendFormat": "users",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 3,
+      "title": "Client vs server request rate",
+      "description": "A gap between the lines means requests fail before reaching the handlers (connection errors, timeouts).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "sum(rate(locust_requests_total[$__rate_interval]))",
+          "legendFormat": "Locust sent (req/s)",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "B",
+          "expr": "sum(rate(order_processing_http_requests_total{job=\"order-processing-api\"}[$__rate_interval]))",
+          "legendFormat": "API handled (req/s)",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 4,
+      "title": "Client failures by request",
+      "description": "Locust-side failures, including transport errors (timeouts, resets) that never reach server metrics.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "sum by (name) (rate(locust_requests_total{result=\"failure\"}[$__rate_interval]))",
+          "legendFormat": "{{name}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 5,
+      "title": "Client vs server P95 latency",
+      "description": "Client latency adds network, connection setup and accept-queue time. A widening gap points outside the handlers.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(locust_request_duration_seconds_bucket{}[$__rate_interval])))",
+          "legendFormat": "Locust P95 (client)",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(order_processing_http_request_duration_seconds_bucket{job=\"order-processing-api\"}[$__rate_interval])))",
+          "legendFormat": "API P95 (server)",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "id": 6,
+      "title": "Traffic",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 7,
+      "title": "Request rate",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 18
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "sum(rate(order_processing_http_requests_total{job=\"order-processing-api\",route=~\"$route\",method=~\"$method\",status=~\"$status\"}[$__rate_interval]))",
+          "legendFormat": "req/s",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 8,
+      "title": "Requests by route",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 18
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "sum by (method, route) (rate(order_processing_http_requests_total{job=\"order-processing-api\",route=~\"$route\",method=~\"$method\",status=~\"$status\"}[$__rate_interval]))",
+          "legendFormat": "{{method}} {{route}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 9,
+      "title": "Requests by status",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 18
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "sum by (status) (rate(order_processing_http_requests_total{job=\"order-processing-api\",route=~\"$route\",method=~\"$method\",status=~\"$status\"}[$__rate_interval]))",
+          "legendFormat": "{{status}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "id": 10,
+      "title": "Latency (server side)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 11,
+      "title": "P50 / P95 / P99",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 27
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(order_processing_http_request_duration_seconds_bucket{job=\"order-processing-api\",route=~\"$route\",method=~\"$method\",status=~\"$status\"}[$__rate_interval])))",
+          "legendFormat": "P50",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(order_processing_http_request_duration_seconds_bucket{job=\"order-processing-api\",route=~\"$route\",method=~\"$method\",status=~\"$status\"}[$__rate_interval])))",
+          "legendFormat": "P95",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "C",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(order_processing_http_request_duration_seconds_bucket{job=\"order-processing-api\",route=~\"$route\",method=~\"$method\",status=~\"$status\"}[$__rate_interval])))",
+          "legendFormat": "P99",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 12,
+      "title": "P95 by route",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 27
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, method, route) (rate(order_processing_http_request_duration_seconds_bucket{job=\"order-processing-api\",route=~\"$route\",method=~\"$method\",status=~\"$status\"}[$__rate_interval])))",
+          "legendFormat": "{{method}} {{route}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "id": 13,
+      "title": "Errors",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 35
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 14,
+      "title": "5xx rate",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 36
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "sum by (method, route) (rate(order_processing_http_requests_total{job=\"order-processing-api\",route=~\"$route\",method=~\"$method\",status=~\"5..\"}[$__rate_interval]))",
+          "legendFormat": "{{method}} {{route}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 15,
+      "title": "4xx rate",
+      "description": "Expected 400s (insufficient stock in the contention scenario) appear here, not as 5xx.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 36
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "sum by (method, route, status) (rate(order_processing_http_requests_total{job=\"order-processing-api\",route=~\"$route\",method=~\"$method\",status=~\"4..\"}[$__rate_interval]))",
+          "legendFormat": "{{status}} {{method}} {{route}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 16,
+      "title": "5xx error percentage",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 36
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "100 * sum(rate(order_processing_http_requests_total{job=\"order-processing-api\",route=~\"$route\",method=~\"$method\",status=~\"5..\"}[$__rate_interval])) / clamp_min(sum(rate(order_processing_http_requests_total{job=\"order-processing-api\",route=~\"$route\",method=~\"$method\",status=~\"$status\"}[$__rate_interval])), 1e-9)",
+          "legendFormat": "5xx %",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "id": 17,
+      "title": "Go runtime (API process)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 44
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 18,
+      "title": "CPU",
+      "description": "CPU cores used by the API process (1.0 = one full core).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 45
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "rate(process_cpu_seconds_total{job=\"order-processing-api\"}[$__rate_interval])",
+          "legendFormat": "cores",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 19,
+      "title": "Memory",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 45
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "process_resident_memory_bytes{job=\"order-processing-api\"}",
+          "legendFormat": "RSS",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "B",
+          "expr": "go_memstats_heap_alloc_bytes{job=\"order-processing-api\"}",
+          "legendFormat": "heap in use",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 20,
+      "title": "Goroutines",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 45
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "go_goroutines{job=\"order-processing-api\"}",
+          "legendFormat": "goroutines",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 21,
+      "title": "In-flight requests",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 45
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "sum(order_processing_http_requests_in_flight{job=\"order-processing-api\",route=~\"$route\",method=~\"$method\"})",
+          "legendFormat": "in flight",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "id": 22,
+      "title": "Database pool (database/sql)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 53
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 23,
+      "title": "Connections",
+      "description": "In-use reaching max open means requests queue for a connection (see the wait panels).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 54
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "go_sql_open_connections{job=\"order-processing-api\"}",
+          "legendFormat": "open",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "B",
+          "expr": "go_sql_in_use_connections{job=\"order-processing-api\"}",
+          "legendFormat": "in use",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "C",
+          "expr": "go_sql_idle_connections{job=\"order-processing-api\"}",
+          "legendFormat": "idle",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "D",
+          "expr": "go_sql_max_open_connections{job=\"order-processing-api\"}",
+          "legendFormat": "max open",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 24,
+      "title": "Waits for a connection",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 54
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "rate(go_sql_wait_count_total{job=\"order-processing-api\"}[$__rate_interval])",
+          "legendFormat": "waits/s",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 25,
+      "title": "Time spent waiting for a connection",
+      "description": "Seconds of waiting accumulated per second across goroutines (5 = on average five requests blocked on the pool).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 54
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "rate(go_sql_wait_duration_seconds_total{job=\"order-processing-api\"}[$__rate_interval])",
+          "legendFormat": "wait s/s",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "id": 26,
+      "title": "CDC (PostgreSQL -> Debezium -> Kafka -> API consumer)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 62
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 27,
+      "title": "CDC events consumed",
+      "description": "Debezium ops: c=create, u=update, d=delete, r=snapshot. Only topics listed in KAFKA_CDC_TOPIC are consumed.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 63
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "sum by (table, operation) (rate(order_processing_cdc_events_total{job=\"order-processing-api\"}[$__rate_interval]))",
+          "legendFormat": "{{table}} {{operation}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 28,
+      "title": "Commit -> consume lag",
+      "description": "Time from the PostgreSQL commit (Debezium source.ts_ms) to the API reading the event.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 63
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(order_processing_cdc_end_to_end_lag_seconds_bucket{job=\"order-processing-api\"}[$__rate_interval])))",
+          "legendFormat": "P50",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(order_processing_cdc_end_to_end_lag_seconds_bucket{job=\"order-processing-api\"}[$__rate_interval])))",
+          "legendFormat": "P95",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 29,
+      "title": "Consumer lag and errors",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 63
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "A",
+          "expr": "order_processing_cdc_consumer_lag_messages{job=\"order-processing-api\"}",
+          "legendFormat": "lag (messages)",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "refId": "B",
+          "expr": "sum by (stage) (rate(order_processing_cdc_errors_total{job=\"order-processing-api\"}[$__rate_interval]))",
+          "legendFormat": "errors/s {{stage}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "id": 30,
+      "title": "Slow traces (Jaeger)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 71
+      },
+      "panels": []
+    },
+    {
+      "type": "table",
+      "id": 31,
+      "title": "Recent traces slower than $slow_threshold",
+      "description": "Jaeger search for the API service within the dashboard time range. Click a trace ID to open it.",
+      "datasource": {
+        "type": "jaeger",
+        "uid": "jaeger"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 72
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Duration",
+            "desc": true
+          }
+        ]
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "jaeger",
+            "uid": "jaeger"
+          },
+          "refId": "A",
+          "queryType": "search",
+          "service": "enterprise-order-processing",
+          "minDuration": "$slow_threshold",
+          "limit": 20
+        }
+      ]
+    }
+  ]
 }

@@ -9,10 +9,22 @@ scrape_configs:
       - targets:
           - prometheus:9090
 
+  # The API runs on the host (go run ./cmd/server). A 5s interval keeps
+  # short load-test phases (spikes, recovery) visible in Grafana.
   - job_name: order-processing-api
+    scrape_interval: 5s
 
     metrics_path: /metrics
 
     static_configs:
       - targets:
           - host.docker.internal:8080
+
+  # Locust exporter started by locust/scenarios/common.py (local runner
+  # only). The target is down whenever Locust is not running.
+  - job_name: locust
+    scrape_interval: 5s
+
+    static_configs:
+      - targets:
+          - host.docker.internal:9646

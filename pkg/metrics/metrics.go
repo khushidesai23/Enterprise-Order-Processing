@@ -3,18 +3,13 @@ package metrics
 import (
 	"database/sql"
 	"sync"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 )
 
 var (
-	registerOnce       sync.Once
-	dbOpenConnections  = prometheus.NewGauge(prometheus.GaugeOpts{Namespace: "order_processing", Subsystem: "db", Name: "open_connections", Help: "Current number of open database connections."})
-	dbInUseConnections = prometheus.NewGauge(prometheus.GaugeOpts{Namespace: "order_processing", Subsystem: "db", Name: "in_use_connections", Help: "Current number of in-use database connections."})
-	dbIdleConnections  = prometheus.NewGauge(prometheus.GaugeOpts{Namespace: "order_processing", Subsystem: "db", Name: "idle_connections", Help: "Current number of idle database connections."})
-	dbWaitCount        = prometheus.NewCounter(prometheus.CounterOpts{Namespace: "order_processing", Subsystem: "db", Name: "wait_count_total", Help: "Cumulative count of waits for a database connection."})
-	dbWaitDuration     = prometheus.NewCounter(prometheus.CounterOpts{Namespace: "order_processing", Subsystem: "db", Name: "wait_duration_seconds_total", Help: "Cumulative time spent waiting for a database connection, in seconds."})
+	registerOnce sync.Once
 
 	HTTPRequestDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -57,6 +52,45 @@ var (
 			"route",
 		},
 	)
+
+	// CDCEventsTotal counts Debezium change events consumed from Kafka.
+	CDCEventsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "order_processing",
+			Subsystem: "cdc",
+			Name:      "events_total",
+			Help:      "Debezium change events consumed, by source table and operation.",
+		},
+		[]string{
+			"table",
+			"operation",
+		},
+	)
+
+	// CDCErrorsTotal counts consumer failures by stage (read, decode, process).
+	CDCErrorsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "order_processing",
+			Subsystem: "cdc",
+			Name:      "errors_total",
+			Help:      "CDC consumer errors by stage.",
+		},
+		[]string{
+			"stage",
+		},
+	)
+
+	// CDCEndToEndLag is the delay between the source database commit
+	// (Debezium source.ts_ms) and the application consuming the event.
+	CDCEndToEndLag = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Namespace: "order_processing",
+			Subsystem: "cdc",
+			Name:      "end_to_end_lag_seconds",
+			Help:      "Seconds from PostgreSQL commit to CDC event consumption.",
+			Buckets:   []float64{0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 300},
+		},
+	)
 )
 
 func Register() {
@@ -65,52 +99,33 @@ func Register() {
 			HTTPRequestDuration,
 			HTTPRequestsTotal,
 			HTTPRequestsInFlight,
-			dbOpenConnections,
-			dbInUseConnections,
-			dbIdleConnections,
-			dbWaitCount,
-			dbWaitDuration,
+			CDCEventsTotal,
+			CDCErrorsTotal,
+			CDCEndToEndLag,
 		)
 	})
 }
 
-// StartDBPoolCollector periodically exports database/sql pool statistics.
-// The scrape path and HTTP request path never query the pool directly.
-func StartDBPoolCollector(db *sql.DB, interval time.Duration) func() {
-	if interval <= 0 {
-		interval = 15 * time.Second
-	}
-	stop := make(chan struct{})
-	done := make(chan struct{})
-	update := func() {
-		stats := db.Stats()
-		dbOpenConnections.Set(float64(stats.OpenConnections))
-		dbInUseConnections.Set(float64(stats.InUse))
-		dbIdleConnections.Set(float64(stats.Idle))
-		dbWaitCount.Add(float64(stats.WaitCount) - dbWaitCountValue)
-		dbWaitDuration.Add(stats.WaitDuration.Seconds() - dbWaitDurationValue)
-		dbWaitCountValue = float64(stats.WaitCount)
-		dbWaitDurationValue = stats.WaitDuration.Seconds()
-	}
-	update()
-	go func() {
-		defer close(done)
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				update()
-			case <-stop:
-				update()
-				return
-			}
-		}
-	}()
-	return func() { close(stop); <-done }
+// RegisterCDCConsumerLag exports the Kafka consumer lag (messages behind
+// the head of the most recently fetched partition), read at scrape time.
+func RegisterCDCConsumerLag(lag func() int64) error {
+	return prometheus.Register(
+		prometheus.NewGaugeFunc(
+			prometheus.GaugeOpts{
+				Namespace: "order_processing",
+				Subsystem: "cdc",
+				Name:      "consumer_lag_messages",
+				Help:      "Kafka consumer lag in messages for the most recently fetched partition.",
+			},
+			func() float64 { return float64(lag()) },
+		),
+	)
 }
 
-var (
-	dbWaitCountValue    float64
-	dbWaitDurationValue float64
-)
+// RegisterDBStats exports database/sql pool statistics as go_sql_* metrics
+// labelled db_name. Values are read from db.Stats() at scrape time.
+func RegisterDBStats(db *sql.DB, dbName string) error {
+	return prometheus.Register(
+		collectors.NewDBStatsCollector(db, dbName),
+	)
+}
