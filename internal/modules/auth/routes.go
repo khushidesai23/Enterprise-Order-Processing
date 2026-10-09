@@ -5,19 +5,14 @@ import "github.com/gin-gonic/gin"
 func RegisterRoutes(
 	router *gin.RouterGroup,
 	handler *Handler,
+	auth gin.HandlerFunc,
 ) {
-
-	auth := router.Group("/auth")
-
+	authGroup := router.Group("/auth")
 	{
-		auth.POST(
-			"/login",
-			handler.Login,
-		)
+		// Login
+		authGroup.POST("/login", handler.Login)
 
-		auth.GET(
-			"/me",
-			handler.Me,
-		)
+		// Current User
+		authGroup.GET("/me", auth, handler.Me)
 	}
 }

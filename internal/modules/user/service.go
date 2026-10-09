@@ -2,7 +2,6 @@ package user
 
 import (
 	"context"
-	"errors"
 	"strings"
 
 	"github.com/google/uuid"
@@ -194,11 +193,4 @@ func (s *service) Delete(
 	)
 
 	return nil
-}
-
-func IsBusinessError(err error) bool {
-
-	return errors.Is(err, ErrUserAlreadyExists) ||
-		errors.Is(err, ErrUserNotFound) ||
-		errors.Is(err, ErrInvalidPassword)
 }

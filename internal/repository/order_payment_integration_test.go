@@ -77,7 +77,6 @@ func TestOrderPaymentRepositoryTransactions(t *testing.T) {
 				Price:     120,
 			},
 		}))
-		require.NoError(t, orderRepo.UpdateTotalAmount(ctx, tx, order.ID, 120))
 
 		paymentModel := &models.Payment{
 			OrderID:        order.ID,

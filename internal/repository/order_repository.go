@@ -196,41 +196,6 @@ func (r *OrderRepository) GetByUserIDPage(
 // and Save() attempts to persist the whole object graph.
 //
 
-func (r *OrderRepository) UpdateStatus(
-	ctx context.Context,
-	id uuid.UUID,
-	status models.OrderStatus,
-) error {
-
-	return r.db.
-		WithContext(ctx).
-		Model(&models.Order{}).
-		Where("id = ?", id).
-		Update(
-			"status",
-			status,
-		).
-		Error
-}
-
-func (r *OrderRepository) UpdateTotalAmount(
-	ctx context.Context,
-	tx *gorm.DB,
-	id uuid.UUID,
-	total float64,
-) error {
-
-	return tx.
-		WithContext(ctx).
-		Model(&models.Order{}).
-		Where("id = ?", id).
-		Update(
-			"total_amount",
-			total,
-		).
-		Error
-}
-
 // UpdateStatusTx updates order status inside a transaction.
 func (r *OrderRepository) UpdateStatusTx(
 	ctx context.Context,
@@ -253,18 +218,3 @@ func (r *OrderRepository) UpdateStatusTx(
 //
 // Delete
 //
-
-func (r *OrderRepository) Delete(
-	ctx context.Context,
-	id uuid.UUID,
-) error {
-
-	return r.db.
-		WithContext(ctx).
-		Delete(
-			&models.Order{},
-			"id = ?",
-			id,
-		).
-		Error
-}

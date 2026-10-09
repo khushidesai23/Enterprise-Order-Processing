@@ -54,22 +54,13 @@ func Register(
 		api.GET("/ping", healthHandler.Ping)
 		api.GET("/version", healthHandler.Version)
 
-		// Authentication
-		authGroup := api.Group("/auth")
-		{
-			authGroup.POST(
-				"/login",
-				authHandler.Login,
-			)
-
-			authGroup.GET(
-				"/me",
-				authMiddleware,
-				authHandler.Me,
-			)
-		}
-
 		// Modules
+		auth.RegisterRoutes(
+			api,
+			authHandler,
+			authMiddleware,
+		)
+
 		user.RegisterRoutes(
 			api,
 			userHandler,

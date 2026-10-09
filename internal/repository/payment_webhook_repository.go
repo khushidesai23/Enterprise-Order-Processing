@@ -86,25 +86,3 @@ func (r *PaymentWebhookRepository) MarkProcessed(
 		}).
 		Error
 }
-
-// MarkFailed marks a webhook as failed.
-func (r *PaymentWebhookRepository) MarkFailed(
-	ctx context.Context,
-	tx *gorm.DB,
-	payloadID string,
-	processedAt time.Time,
-) error {
-
-	return tx.
-		WithContext(ctx).
-		Model(&models.PaymentWebhook{}).
-		Where(
-			"payload_id = ?",
-			payloadID,
-		).
-		Updates(map[string]interface{}{
-			"status":       models.WebhookFailed,
-			"processed_at": processedAt,
-		}).
-		Error
-}

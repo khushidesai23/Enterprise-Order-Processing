@@ -135,27 +135,6 @@ func (r *InventoryRepository) ExistsByProductID(
 	return count > 0, nil
 }
 
-// ProductExists checks whether a product exists.
-func (r *InventoryRepository) ProductExists(
-	ctx context.Context,
-	productID uuid.UUID,
-) (bool, error) {
-
-	var count int64
-
-	err := r.db.WithContext(ctx).
-		Model(&models.Product{}).
-		Where("id = ?", productID).
-		Count(&count).
-		Error
-
-	if err != nil {
-		return false, err
-	}
-
-	return count > 0, nil
-}
-
 // Update updates inventory.
 func (r *InventoryRepository) Update(
 	ctx context.Context,
@@ -172,17 +151,6 @@ func (r *InventoryRepository) Update(
 		Error
 }
 
-// Delete deletes inventory.
-func (r *InventoryRepository) Delete(
-	ctx context.Context,
-	inventory *models.Inventory,
-) error {
-
-	return r.db.WithContext(ctx).
-		Delete(inventory).
-		Error
-}
-
 //
 // Business Operations
 //
@@ -195,27 +163,6 @@ func (r *InventoryRepository) AddStock(
 ) error {
 
 	return r.db.WithContext(ctx).
-		Model(&models.Inventory{}).
-		Where("product_id = ?", productID).
-		UpdateColumn(
-			"available_quantity",
-			gorm.Expr(
-				"available_quantity + ?",
-				quantity,
-			),
-		).
-		Error
-}
-
-// AddStockTx increases available stock inside a transaction.
-func (r *InventoryRepository) AddStockTx(
-	ctx context.Context,
-	tx *gorm.DB,
-	productID uuid.UUID,
-	quantity int,
-) error {
-
-	return tx.WithContext(ctx).
 		Model(&models.Inventory{}).
 		Where("product_id = ?", productID).
 		UpdateColumn(

@@ -138,13 +138,6 @@ func (s *Service) Login(
 	}, nil
 }
 
-func (s *Service) VerifyToken(
-	token string,
-) (*Claims, error) {
-
-	return s.jwt.VerifyToken(token)
-}
-
 func (s *Service) GetCurrentUser(
 	ctx context.Context,
 	userID string,
