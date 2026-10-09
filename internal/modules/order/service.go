@@ -1,8 +1,10 @@
 package order
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"slices"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -84,6 +86,13 @@ func (s *Service) CreateOrder(
 		return nil, err
 	}
 
+	// Lock inventory rows in a stable order so concurrent multi-item
+	// orders cannot deadlock on each other.
+	items := slices.Clone(req.Items)
+	slices.SortFunc(items, func(a, b CreateOrderItemRequest) int {
+		return bytes.Compare(a.ProductID[:], b.ProductID[:])
+	})
+
 	tx := s.orderRepository.Begin(ctx)
 
 	if tx.Error != nil {
@@ -123,7 +132,7 @@ func (s *Service) CreateOrder(
 		total      float64
 	)
 
-	for _, requestItem := range req.Items {
+	for _, requestItem := range items {
 
 		product, err := s.productRepository.GetByID(
 			ctx,
@@ -223,6 +232,15 @@ func (s *Service) CreateOrder(
 	if err != nil {
 		return nil, err
 	}
+
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"order created",
+		zap.String("order_id", order.ID.String()),
+		zap.String("user_id", order.UserID.String()),
+		zap.Float64("total_amount", order.TotalAmount),
+	)
 
 	response := ToOrderResponse(order)
 
@@ -409,15 +427,6 @@ func (s *Service) UpdateOrderStatus(
 	}
 
 	response := ToOrderResponse(order)
-
-	logger.InfoContext(
-		ctx,
-		s.log,
-		"order created",
-		zap.String("order_id", order.ID.String()),
-		zap.String("user_id", order.UserID.String()),
-		zap.Float64("total_amount", order.TotalAmount),
-	)
 
 	return &response, nil
 }
@@ -727,7 +736,7 @@ func (s *Service) confirmReservedInventory(
 	order *models.Order,
 ) error {
 
-	for _, item := range order.Items {
+	for _, item := range itemsInLockOrder(order.Items) {
 
 		inventory, err := s.inventoryRepository.GetByProductIDTx(
 			ctx,
@@ -775,7 +784,7 @@ func (s *Service) releaseReservedInventory(
 	order *models.Order,
 ) error {
 
-	for _, item := range order.Items {
+	for _, item := range itemsInLockOrder(order.Items) {
 
 		inventory, err := s.inventoryRepository.GetByProductIDTx(
 			ctx,
@@ -815,6 +824,17 @@ func (s *Service) releaseReservedInventory(
 	}
 
 	return nil
+}
+
+// itemsInLockOrder returns order items sorted by product ID, the same order
+// CreateOrder uses, so every inventory-locking path acquires row locks
+// consistently.
+func itemsInLockOrder(items []models.OrderItem) []models.OrderItem {
+	sorted := slices.Clone(items)
+	slices.SortFunc(sorted, func(a, b models.OrderItem) int {
+		return bytes.Compare(a.ProductID[:], b.ProductID[:])
+	})
+	return sorted
 }
 
 func (s *Service) ensureUniqueProducts(

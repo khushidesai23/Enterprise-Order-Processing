@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -225,5 +226,97 @@ func TestOrderServiceIntegrationFlow(t *testing.T) {
 		orders, err := orderRepo.GetByUserID(ctx, loadUser.ID)
 		require.NoError(t, err)
 		assert.Len(t, orders, 10)
+	})
+
+	t.Run("concurrent cancels release reserved stock once", func(t *testing.T) {
+		testintegration.CleanupDatabase(t, db)
+		cancelUser := testintegration.CreateUserFixture(t, creator, "Cancel", "Race", "cancel-race@example.com", "password123")
+		cancelCategory := testintegration.CreateCategoryFixture(t, creator, "Cancel Race Category")
+		cancelProduct := testintegration.CreateProductFixture(t, creator, cancelCategory.ID, "Cancel Race Product", "SKU-CANCEL-RACE-1", 10)
+		testintegration.CreateInventoryFixture(t, creator, cancelProduct.ID, 10, 0)
+
+		// Two open orders keep enough reserved stock that a double release
+		// would not be caught by the reserved >= quantity guard alone.
+		var orderIDs []uuid.UUID
+		for range 2 {
+			created, err := service.CreateOrder(ctx, ordermodule.CreateOrderRequest{
+				UserID: cancelUser.ID,
+				Items:  []ordermodule.CreateOrderItemRequest{{ProductID: cancelProduct.ID, Quantity: 3}},
+			})
+			require.NoError(t, err)
+			orderIDs = append(orderIDs, created.ID)
+		}
+
+		const cancels = 10
+		results := make(chan error, cancels)
+		var workers sync.WaitGroup
+		workers.Add(cancels)
+		for range cancels {
+			go func() {
+				defer workers.Done()
+				_, err := service.CancelOrder(ctx, orderIDs[0])
+				results <- err
+			}()
+		}
+		workers.Wait()
+		close(results)
+
+		var cancelled int
+		for err := range results {
+			switch {
+			case err == nil:
+				cancelled++
+			case errors.Is(err, ordermodule.ErrOrderAlreadyCancelled):
+			default:
+				t.Errorf("unexpected cancel error: %v", err)
+			}
+		}
+		assert.Equal(t, 1, cancelled)
+
+		inventory, err := inventoryRepo.GetByProductID(ctx, cancelProduct.ID)
+		require.NoError(t, err)
+		assert.Equal(t, 7, inventory.AvailableQuantity)
+		assert.Equal(t, 3, inventory.ReservedQuantity)
+	})
+
+	t.Run("multi-item orders locking products in opposite order do not deadlock", func(t *testing.T) {
+		testintegration.CleanupDatabase(t, db)
+		lockUser := testintegration.CreateUserFixture(t, creator, "Lock", "Order", "lock-order@example.com", "password123")
+		lockCategory := testintegration.CreateCategoryFixture(t, creator, "Lock Order Category")
+		first := testintegration.CreateProductFixture(t, creator, lockCategory.ID, "Lock A", "SKU-LOCK-A", 1)
+		second := testintegration.CreateProductFixture(t, creator, lockCategory.ID, "Lock B", "SKU-LOCK-B", 1)
+		testintegration.CreateInventoryFixture(t, creator, first.ID, 1000, 0)
+		testintegration.CreateInventoryFixture(t, creator, second.ID, 1000, 0)
+
+		const requests = 40
+		results := make(chan error, requests)
+		var workers sync.WaitGroup
+		workers.Add(requests)
+		for i := range requests {
+			items := []ordermodule.CreateOrderItemRequest{
+				{ProductID: first.ID, Quantity: 1},
+				{ProductID: second.ID, Quantity: 1},
+			}
+			if i%2 == 1 {
+				items[0], items[1] = items[1], items[0]
+			}
+			go func() {
+				defer workers.Done()
+				_, err := service.CreateOrder(ctx, ordermodule.CreateOrderRequest{UserID: lockUser.ID, Items: items})
+				results <- err
+			}()
+		}
+		workers.Wait()
+		close(results)
+
+		for err := range results {
+			assert.NoError(t, err)
+		}
+		for _, productID := range []uuid.UUID{first.ID, second.ID} {
+			inventory, err := inventoryRepo.GetByProductID(ctx, productID)
+			require.NoError(t, err)
+			assert.Equal(t, 1000-requests, inventory.AvailableQuantity)
+			assert.Equal(t, requests, inventory.ReservedQuantity)
+		}
 	})
 }
