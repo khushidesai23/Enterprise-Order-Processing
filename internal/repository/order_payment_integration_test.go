@@ -1,6 +1,6 @@
 //go:build integration
 
-package repository
+package repository_test
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 	testintegration "github.com/khushidesai23/Enterprise-Order-Processing/internal/test/integration"
 )
 
@@ -30,10 +31,10 @@ func TestOrderPaymentRepositoryTransactions(t *testing.T) {
 	category := testintegration.CreateCategoryFixture(t, creator, "Orders")
 	product := testintegration.CreateProductFixture(t, creator, category.ID, "Keyboard", "SKU-ORDER-1", 120)
 
-	orderRepo := NewOrderRepository(db.DB)
-	orderItemRepo := NewOrderItemRepository(db.DB)
-	paymentRepo := NewPaymentRepository(db.DB)
-	webhookRepo := NewPaymentWebhookRepository(db.DB)
+	orderRepo := repository.NewOrderRepository(db.DB)
+	orderItemRepo := repository.NewOrderItemRepository(db.DB)
+	paymentRepo := repository.NewPaymentRepository(db.DB)
+	webhookRepo := repository.NewPaymentWebhookRepository(db.DB)
 
 	t.Run("rollback removes inserted order", func(t *testing.T) {
 		tx := orderRepo.Begin(ctx)

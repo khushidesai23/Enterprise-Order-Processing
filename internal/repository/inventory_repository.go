@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
 )
@@ -69,6 +70,7 @@ func (r *InventoryRepository) GetByProductIDTx(
 	var inventory models.Inventory
 
 	err := tx.WithContext(ctx).
+		Clauses(clause.Locking{Strength: "UPDATE"}).
 		Preload("Product").
 		First(
 			&inventory,

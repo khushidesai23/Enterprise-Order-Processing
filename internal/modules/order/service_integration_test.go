@@ -1,9 +1,11 @@
 //go:build integration
 
-package order
+package order_test
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
+	ordermodule "github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/order"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 	testintegration "github.com/khushidesai23/Enterprise-Order-Processing/internal/test/integration"
 )
@@ -46,7 +49,7 @@ func TestOrderServiceIntegrationFlow(t *testing.T) {
 	productRepo := repository.NewProductRepository(db.DB)
 	inventoryRepo := repository.NewInventoryRepository(db.DB)
 
-	service := NewService(
+	service := ordermodule.NewService(
 		orderRepo,
 		orderItemRepo,
 		userRepo,
@@ -56,9 +59,9 @@ func TestOrderServiceIntegrationFlow(t *testing.T) {
 	)
 
 	t.Run("creating an order reserves inventory", func(t *testing.T) {
-		orderResp, err := service.CreateOrder(ctx, CreateOrderRequest{
+		orderResp, err := service.CreateOrder(ctx, ordermodule.CreateOrderRequest{
 			UserID: user.ID,
-			Items: []CreateOrderItemRequest{
+			Items: []ordermodule.CreateOrderItemRequest{
 				{
 					ProductID: product.ID,
 					Quantity:  2,
@@ -83,9 +86,9 @@ func TestOrderServiceIntegrationFlow(t *testing.T) {
 		product = testintegration.CreateProductFixture(t, creator, category.ID, "Cancel Product", "SKU-CANCEL-1", 75)
 		testintegration.CreateInventoryFixture(t, creator, product.ID, 6, 0)
 
-		orderResp, err := service.CreateOrder(ctx, CreateOrderRequest{
+		orderResp, err := service.CreateOrder(ctx, ordermodule.CreateOrderRequest{
 			UserID: user.ID,
-			Items: []CreateOrderItemRequest{
+			Items: []ordermodule.CreateOrderItemRequest{
 				{ProductID: product.ID, Quantity: 2},
 			},
 		})
@@ -108,9 +111,9 @@ func TestOrderServiceIntegrationFlow(t *testing.T) {
 		product = testintegration.CreateProductFixture(t, creator, category.ID, "Ship Product", "SKU-SHIP-1", 110)
 		testintegration.CreateInventoryFixture(t, creator, product.ID, 10, 0)
 
-		orderResp, err := service.CreateOrder(ctx, CreateOrderRequest{
+		orderResp, err := service.CreateOrder(ctx, ordermodule.CreateOrderRequest{
 			UserID: user.ID,
-			Items: []CreateOrderItemRequest{
+			Items: []ordermodule.CreateOrderItemRequest{
 				{ProductID: product.ID, Quantity: 2},
 			},
 		})
@@ -124,12 +127,12 @@ func TestOrderServiceIntegrationFlow(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		_, err = service.UpdateOrderStatus(ctx, orderResp.ID, UpdateOrderStatusRequest{
+		_, err = service.UpdateOrderStatus(ctx, orderResp.ID, ordermodule.UpdateOrderStatusRequest{
 			Status: models.OrderPacked,
 		})
 		require.NoError(t, err)
 
-		shipped, err := service.UpdateOrderStatus(ctx, orderResp.ID, UpdateOrderStatusRequest{
+		shipped, err := service.UpdateOrderStatus(ctx, orderResp.ID, ordermodule.UpdateOrderStatusRequest{
 			Status: models.OrderShipped,
 		})
 		require.NoError(t, err)
@@ -150,9 +153,9 @@ func TestOrderServiceIntegrationFlow(t *testing.T) {
 		testintegration.CreateInventoryFixture(t, creator, firstProduct.ID, 10, 0)
 		testintegration.CreateInventoryFixture(t, creator, secondProduct.ID, 1, 0)
 
-		orderResp, err := service.CreateOrder(ctx, CreateOrderRequest{
+		orderResp, err := service.CreateOrder(ctx, ordermodule.CreateOrderRequest{
 			UserID: user.ID,
-			Items: []CreateOrderItemRequest{
+			Items: []ordermodule.CreateOrderItemRequest{
 				{ProductID: firstProduct.ID, Quantity: 2},
 				{ProductID: secondProduct.ID, Quantity: 5},
 			},
@@ -160,7 +163,7 @@ func TestOrderServiceIntegrationFlow(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Nil(t, orderResp)
-		assert.ErrorIs(t, err, ErrInsufficientStock)
+		assert.ErrorIs(t, err, ordermodule.ErrInsufficientStock)
 
 		firstInventory, err := inventoryRepo.GetByProductID(ctx, firstProduct.ID)
 		require.NoError(t, err)
@@ -175,5 +178,52 @@ func TestOrderServiceIntegrationFlow(t *testing.T) {
 		orders, err := orderRepo.GetByUserID(ctx, user.ID)
 		require.NoError(t, err)
 		assert.Empty(t, orders)
+	})
+
+	t.Run("concurrent reservations never oversell", func(t *testing.T) {
+		testintegration.CleanupDatabase(t, db)
+		loadUser := testintegration.CreateUserFixture(t, creator, "Concurrent", "User", "concurrent-user@example.com", "password123")
+		loadCategory := testintegration.CreateCategoryFixture(t, creator, "Concurrent Category")
+		loadProduct := testintegration.CreateProductFixture(t, creator, loadCategory.ID, "Concurrent Product", "SKU-CONCURRENT-1", 1)
+		testintegration.CreateInventoryFixture(t, creator, loadProduct.ID, 10, 0)
+
+		const requests = 50
+		results := make(chan error, requests)
+		var workers sync.WaitGroup
+		workers.Add(requests)
+		for range requests {
+			go func() {
+				defer workers.Done()
+				_, err := service.CreateOrder(ctx, ordermodule.CreateOrderRequest{
+					UserID: loadUser.ID,
+					Items:  []ordermodule.CreateOrderItemRequest{{ProductID: loadProduct.ID, Quantity: 1}},
+				})
+				results <- err
+			}()
+		}
+		workers.Wait()
+		close(results)
+
+		var created, rejected int
+		for err := range results {
+			switch {
+			case err == nil:
+				created++
+			case errors.Is(err, ordermodule.ErrInsufficientStock):
+				rejected++
+			default:
+				t.Errorf("unexpected order error: %v", err)
+			}
+		}
+		assert.Equal(t, 10, created)
+		assert.Equal(t, requests-10, rejected)
+
+		inventory, err := inventoryRepo.GetByProductID(ctx, loadProduct.ID)
+		require.NoError(t, err)
+		assert.Equal(t, 0, inventory.AvailableQuantity)
+		assert.Equal(t, 10, inventory.ReservedQuantity)
+		orders, err := orderRepo.GetByUserID(ctx, loadUser.ID)
+		require.NoError(t, err)
+		assert.Len(t, orders, 10)
 	})
 }
