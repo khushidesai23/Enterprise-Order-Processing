@@ -114,6 +114,8 @@ func (r *OrderRepository) GetByIDTx(
 
 func (r *OrderRepository) GetAll(
 	ctx context.Context,
+	limit int,
+	offset int,
 ) ([]models.Order, error) {
 
 	var orders []models.Order
@@ -122,6 +124,8 @@ func (r *OrderRepository) GetAll(
 		WithContext(ctx).
 		Preload("Items").
 		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
 		Find(&orders).
 		Error
 
@@ -151,6 +155,28 @@ func (r *OrderRepository) GetByUserID(
 		return nil, err
 	}
 
+	return orders, nil
+}
+
+func (r *OrderRepository) GetByUserIDPage(
+	ctx context.Context,
+	userID uuid.UUID,
+	limit int,
+	offset int,
+) ([]models.Order, error) {
+	var orders []models.Order
+	err := r.db.
+		WithContext(ctx).
+		Preload("Items").
+		Where("user_id = ?", userID).
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&orders).
+		Error
+	if err != nil {
+		return nil, err
+	}
 	return orders, nil
 }
 
