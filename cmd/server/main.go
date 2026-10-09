@@ -111,6 +111,13 @@ func main() {
 		}
 	}()
 
+	sqlDB, err := db.DB.DB()
+	if err != nil {
+		log.Fatal("database pool metrics initialization failed", zap.Error(err))
+	}
+	stopDBPoolMetrics := metrics.StartDBPoolCollector(sqlDB, 15*time.Second)
+	defer stopDBPoolMetrics()
+
 	// Auto Migration
 	if err := db.AutoMigrate(); err != nil {
 		log.Fatal(
