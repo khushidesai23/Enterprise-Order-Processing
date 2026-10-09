@@ -40,7 +40,7 @@ type Config struct {
 
 	KafkaBrokers    []string
 	KafkaCDCGroupID string
-	KafkaCDCTopic   string
+	KafkaCDCTopics  []string
 	KafkaMinBytes   int
 	KafkaMaxBytes   int
 	KafkaMaxWait    time.Duration
@@ -83,13 +83,15 @@ func Load() (*Config, error) {
 		OTelEnvironment:      viper.GetString("OTEL_ENVIRONMENT"),
 		OTelExporterEndpoint: viper.GetString("OTEL_EXPORTER_OTLP_ENDPOINT"),
 
-		KafkaBrokers: parseKafkaBrokers(
+		KafkaBrokers: parseList(
 			viper.GetString("KAFKA_BROKERS"),
 		),
 		KafkaCDCGroupID: viper.GetString("KAFKA_CDC_GROUP_ID"),
-		KafkaCDCTopic:   viper.GetString("KAFKA_CDC_TOPIC"),
-		KafkaMinBytes:   viper.GetInt("KAFKA_MIN_BYTES"),
-		KafkaMaxBytes:   viper.GetInt("KAFKA_MAX_BYTES"),
+		KafkaCDCTopics: parseList(
+			viper.GetString("KAFKA_CDC_TOPIC"),
+		),
+		KafkaMinBytes: viper.GetInt("KAFKA_MIN_BYTES"),
+		KafkaMaxBytes: viper.GetInt("KAFKA_MAX_BYTES"),
 		KafkaMaxWait: mustParseDuration(
 			viper.GetString("KAFKA_MAX_WAIT"),
 		),
@@ -211,7 +213,7 @@ func (c *Config) Validate() error {
 		return errors.New("KAFKA_CDC_GROUP_ID is required")
 	}
 
-	if strings.TrimSpace(c.KafkaCDCTopic) == "" {
+	if len(c.KafkaCDCTopics) == 0 {
 		return errors.New("KAFKA_CDC_TOPIC is required")
 	}
 
@@ -304,7 +306,7 @@ func mustParseDuration(value string) time.Duration {
 	return d
 }
 
-func parseKafkaBrokers(value string) []string {
+func parseList(value string) []string {
 	parts := strings.Split(value, ",")
 
 	brokers := make([]string, 0, len(parts))

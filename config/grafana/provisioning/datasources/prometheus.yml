@@ -8,3 +8,14 @@ datasources:
     url: http://prometheus:9090
     isDefault: true
     editable: false
+    jsonData:
+      # Matches the API/Locust scrape interval so $__rate_interval
+      # resolves to a window with enough samples.
+      timeInterval: 5s
+
+  - name: Jaeger
+    uid: jaeger
+    type: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    editable: false
