@@ -93,13 +93,3 @@ func ErrorContext(
 ) {
 	WithContext(ctx, log).Error(msg, fields...)
 }
-
-// DebugContext logs a debug message with trace correlation.
-func DebugContext(
-	ctx context.Context,
-	log *zap.Logger,
-	msg string,
-	fields ...zap.Field,
-) {
-	WithContext(ctx, log).Debug(msg, fields...)
-}

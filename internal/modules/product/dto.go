@@ -53,23 +53,6 @@ type InventorySummary struct {
 	ReservedQuantity  int `json:"reserved_quantity"`
 }
 
-type ProductQuery struct {
-	Page       int
-	Limit      int
-	CategoryID *uuid.UUID
-	Search     string
-	SortBy     string
-	Order      string
-}
-
-func NewProductQuery() ProductQuery {
-	return ProductQuery{
-		Page:  1,
-		Limit: 10,
-		Order: "asc",
-	}
-}
-
 type ProductStatistics struct {
 	TotalProducts int64 `json:"total_products"`
 	ActiveSKU     int64 `json:"active_sku"`

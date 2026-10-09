@@ -55,31 +55,6 @@ func (r *CategoryRepository) GetByID(
 	return &category, nil
 }
 
-// GetByName returns a category by name.
-func (r *CategoryRepository) GetByName(
-	ctx context.Context,
-	name string,
-) (*models.Category, error) {
-
-	var category models.Category
-
-	err := r.db.WithContext(ctx).
-		Preload("Products").
-		Where("name = ?", name).
-		First(&category).
-		Error
-
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, err
-		}
-
-		return nil, err
-	}
-
-	return &category, nil
-}
-
 // GetAll returns all categories.
 func (r *CategoryRepository) GetAll(
 	ctx context.Context,

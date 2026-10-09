@@ -82,14 +82,3 @@ func ToOrderList(orders []models.Order) []OrderListResponse {
 
 	return response
 }
-
-func CalculateOrderTotal(items []models.OrderItem) float64 {
-
-	var total float64
-
-	for _, item := range items {
-		total += item.Price * float64(item.Quantity)
-	}
-
-	return total
-}

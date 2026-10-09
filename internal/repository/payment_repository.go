@@ -162,34 +162,6 @@ func (r *PaymentRepository) GetByOrderIDTx(
 	return &payment, nil
 }
 
-func (r *PaymentRepository) GetByGatewayOrderID(
-	ctx context.Context,
-	gatewayOrderID string,
-) (*models.Payment, error) {
-
-	var payment models.Payment
-
-	err := r.db.
-		WithContext(ctx).
-		Where(
-			"gateway_order_id = ?",
-			gatewayOrderID,
-		).
-		First(&payment).
-		Error
-
-	if err != nil {
-
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, err
-		}
-
-		return nil, err
-	}
-
-	return &payment, nil
-}
-
 // GetByGatewayOrderIDTx loads and locks (FOR UPDATE) the payment so
 // concurrent webhooks for the same payment apply status changes serially.
 func (r *PaymentRepository) GetByGatewayOrderIDTx(
@@ -206,34 +178,6 @@ func (r *PaymentRepository) GetByGatewayOrderIDTx(
 		Where(
 			"gateway_order_id = ?",
 			gatewayOrderID,
-		).
-		First(&payment).
-		Error
-
-	if err != nil {
-
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, err
-		}
-
-		return nil, err
-	}
-
-	return &payment, nil
-}
-
-func (r *PaymentRepository) GetByTransactionID(
-	ctx context.Context,
-	transactionID string,
-) (*models.Payment, error) {
-
-	var payment models.Payment
-
-	err := r.db.
-		WithContext(ctx).
-		Where(
-			"transaction_id = ?",
-			transactionID,
 		).
 		First(&payment).
 		Error
@@ -292,48 +236,6 @@ func (r *PaymentRepository) UpdateStatus(
 		Error
 }
 
-func (r *PaymentRepository) UpdateTransaction(
-	ctx context.Context,
-	tx *gorm.DB,
-	id uuid.UUID,
-	transactionID *string,
-) error {
-
-	return tx.
-		WithContext(ctx).
-		Model(&models.Payment{}).
-		Where(
-			"id = ?",
-			id,
-		).
-		Update(
-			"transaction_id",
-			transactionID,
-		).
-		Error
-}
-
-func (r *PaymentRepository) UpdateGatewayOrder(
-	ctx context.Context,
-	tx *gorm.DB,
-	id uuid.UUID,
-	gatewayOrderID string,
-) error {
-
-	return tx.
-		WithContext(ctx).
-		Model(&models.Payment{}).
-		Where(
-			"id = ?",
-			id,
-		).
-		Update(
-			"gateway_order_id",
-			gatewayOrderID,
-		).
-		Error
-}
-
 // Complete Payment
 
 func (r *PaymentRepository) CompletePayment(
@@ -359,18 +261,3 @@ func (r *PaymentRepository) CompletePayment(
 }
 
 // Delete
-
-func (r *PaymentRepository) Delete(
-	ctx context.Context,
-	id uuid.UUID,
-) error {
-
-	return r.db.
-		WithContext(ctx).
-		Delete(
-			&models.Payment{},
-			"id = ?",
-			id,
-		).
-		Error
-}
