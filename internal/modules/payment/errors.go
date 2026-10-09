@@ -26,6 +26,7 @@ var (
 	ErrDuplicateWebhook    = errors.New("duplicate webhook received")
 	ErrWebhookValidation   = errors.New("webhook validation failed")
 	ErrUnknownWebhookEvent = errors.New("unknown webhook event")
+	ErrMissingWebhookEvent = errors.New("missing webhook event id")
 
 	// Transaction Errors
 	ErrTransactionNotFound  = errors.New("transaction not found")

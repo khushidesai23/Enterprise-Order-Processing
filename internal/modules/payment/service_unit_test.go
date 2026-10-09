@@ -87,10 +87,6 @@ func (m *webhookRepositoryMock) MarkProcessed(ctx context.Context, tx *gorm.DB, 
 	return m.Called(ctx, tx, payloadID, processedAt).Error(0)
 }
 
-func (m *webhookRepositoryMock) MarkFailed(ctx context.Context, tx *gorm.DB, payloadID string, processedAt time.Time) error {
-	return m.Called(ctx, tx, payloadID, processedAt).Error(0)
-}
-
 type paymentOrderServiceMock struct {
 	mock.Mock
 }
@@ -143,6 +139,19 @@ func (m *paymentGatewayMock) VerifyWebhookSignature(ctx context.Context, body []
 
 func testPaymentService(repo *paymentRepositoryMock, webhookRepo *webhookRepositoryMock, orderService *paymentOrderServiceMock, gateway *paymentGatewayMock) *Service {
 	return NewService(repo, webhookRepo, orderService, gateway, "rzp_test_key", zap.NewNop())
+}
+
+func TestProcessWebhookRejectsMissingEventID(t *testing.T) {
+	ctx := context.Background()
+	gateway := new(paymentGatewayMock)
+	service := testPaymentService(new(paymentRepositoryMock), new(webhookRepositoryMock), new(paymentOrderServiceMock), gateway)
+	body := []byte(`{"event":"payment.captured"}`)
+	gateway.On("VerifyWebhookSignature", ctx, body, "sig").Return(nil).Once()
+
+	err := service.ProcessWebhook(ctx, ProcessWebhookRequest{Body: body, Signature: "sig"})
+
+	assert.ErrorIs(t, err, ErrMissingWebhookEvent)
+	gateway.AssertExpectations(t)
 }
 
 func TestValidateOrderForPayment(t *testing.T) {
