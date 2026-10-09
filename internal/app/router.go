@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
@@ -22,6 +23,10 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/user"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 )
+
+// requestTimeout must stay below http.Server.WriteTimeout (cmd/server) so a
+// timed-out request still has time to write its 504.
+const requestTimeout = 10 * time.Second
 
 type RouterOptions struct {
 	Config         *config.Config
@@ -133,6 +138,7 @@ func NewRouter(options RouterOptions) (*gin.Engine, error) {
 		}),
 	))
 	router.Use(middleware.Prometheus())
+	router.Use(middleware.RequestTimeout(requestTimeout))
 	router.Use(middleware.RequestLogger(options.Logger))
 	router.Use(middleware.CORS())
 
