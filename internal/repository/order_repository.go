@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
 )
@@ -80,6 +81,9 @@ func (r *OrderRepository) GetByID(
 	return &order, nil
 }
 
+// GetByIDTx loads an order inside a transaction and locks its row
+// (FOR UPDATE OF orders) so concurrent status changes are serialized.
+// Preloaded associations are read without locks.
 func (r *OrderRepository) GetByIDTx(
 	ctx context.Context,
 	tx *gorm.DB,
@@ -90,6 +94,10 @@ func (r *OrderRepository) GetByIDTx(
 
 	err := tx.
 		WithContext(ctx).
+		Clauses(clause.Locking{
+			Strength: "UPDATE",
+			Table:    clause.Table{Name: clause.CurrentTable},
+		}).
 		Preload("User").
 		Preload("Items").
 		Preload("Items.Product").

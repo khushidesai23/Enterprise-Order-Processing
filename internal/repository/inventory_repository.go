@@ -60,7 +60,8 @@ func (r *InventoryRepository) GetByProductID(
 	return &inventory, nil
 }
 
-// GetByProductIDTx returns inventory within a transaction.
+// GetByProductIDTx returns inventory within a transaction and locks the row
+// (FOR UPDATE). The product association is not loaded.
 func (r *InventoryRepository) GetByProductIDTx(
 	ctx context.Context,
 	tx *gorm.DB,
@@ -71,7 +72,6 @@ func (r *InventoryRepository) GetByProductIDTx(
 
 	err := tx.WithContext(ctx).
 		Clauses(clause.Locking{Strength: "UPDATE"}).
-		Preload("Product").
 		First(
 			&inventory,
 			"product_id = ?",
