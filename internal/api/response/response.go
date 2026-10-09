@@ -1,6 +1,8 @@
 package response
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"time"
 
@@ -25,6 +27,14 @@ func Success(c *gin.Context, statusCode int, message string, data any) {
 }
 
 func Error(c *gin.Context, statusCode int, message string) {
+	// Handlers map unexpected errors to 500. When the cause is the request
+	// deadline (middleware.RequestTimeout), report it as a timeout.
+	if statusCode == http.StatusInternalServerError &&
+		errors.Is(c.Request.Context().Err(), context.DeadlineExceeded) {
+		statusCode = http.StatusGatewayTimeout
+		message = "request timed out"
+	}
+
 	c.JSON(statusCode, APIResponse{
 		Success:   false,
 		Error:     message,
