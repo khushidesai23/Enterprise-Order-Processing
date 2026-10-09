@@ -1,6 +1,6 @@
 //go:build integration
 
-package repository
+package repository_test
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 	testintegration "github.com/khushidesai23/Enterprise-Order-Processing/internal/test/integration"
 )
 
@@ -16,7 +17,7 @@ func TestUserRepositoryIntegrationCRUDAndConstraints(t *testing.T) {
 	db := testintegration.NewTestDatabase(t)
 	testintegration.CleanupDatabase(t, db)
 
-	repo := NewUserRepository(db.DB)
+	repo := repository.NewUserRepository(db.DB)
 	ctx := context.Background()
 
 	user := testintegration.CreateUserFixture(

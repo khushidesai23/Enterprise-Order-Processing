@@ -1,6 +1,6 @@
 //go:build integration
 
-package repository
+package repository_test
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 	testintegration "github.com/khushidesai23/Enterprise-Order-Processing/internal/test/integration"
 )
 
@@ -21,9 +22,9 @@ func TestCategoryProductInventoryIntegration(t *testing.T) {
 	creator := testintegration.GormCreator(db.DB)
 	ctx := context.Background()
 
-	categoryRepo := NewCategoryRepository(db.DB)
-	productRepo := NewProductRepository(db.DB)
-	inventoryRepo := NewInventoryRepository(db.DB)
+	categoryRepo := repository.NewCategoryRepository(db.DB)
+	productRepo := repository.NewProductRepository(db.DB)
+	inventoryRepo := repository.NewInventoryRepository(db.DB)
 
 	category := testintegration.CreateCategoryFixture(t, creator, "Electronics")
 	product := testintegration.CreateProductFixture(
