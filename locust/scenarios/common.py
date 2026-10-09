@@ -93,6 +93,11 @@ class AuthenticatedUser(HttpUser):
                 response.failure("Login response did not contain data.token")
 
     def headers(self):
+        # Retry a failed start-up login instead of sending every later
+        # request unauthenticated (one failed login otherwise turns into a
+        # stream of 401s that hides the original failure).
+        if not self.token:
+            self.login()
         return {"Authorization": f"Bearer {self.token}"} if self.token else {}
 
     def create_order(self, quantity=1, allow_insufficient_stock=False):
