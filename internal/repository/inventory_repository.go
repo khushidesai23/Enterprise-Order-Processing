@@ -11,6 +11,10 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
 )
 
+// ErrInsufficientQuantity is returned when a stock decrement would make the
+// guarded quantity negative (or the inventory row does not exist).
+var ErrInsufficientQuantity = errors.New("insufficient inventory quantity")
+
 type InventoryRepository struct {
 	db *gorm.DB
 }
@@ -231,17 +235,7 @@ func (r *InventoryRepository) RemoveStock(
 	quantity int,
 ) error {
 
-	return r.db.WithContext(ctx).
-		Model(&models.Inventory{}).
-		Where("product_id = ?", productID).
-		UpdateColumn(
-			"available_quantity",
-			gorm.Expr(
-				"available_quantity - ?",
-				quantity,
-			),
-		).
-		Error
+	return r.RemoveStockTx(ctx, r.db, productID, quantity)
 }
 
 // RemoveStockTx decreases available stock inside a transaction.
@@ -252,17 +246,11 @@ func (r *InventoryRepository) RemoveStockTx(
 	quantity int,
 ) error {
 
-	return tx.WithContext(ctx).
-		Model(&models.Inventory{}).
-		Where("product_id = ?", productID).
-		UpdateColumn(
-			"available_quantity",
-			gorm.Expr(
-				"available_quantity - ?",
-				quantity,
-			),
-		).
-		Error
+	return guardedUpdate(ctx, tx, productID, "available_quantity", quantity,
+		map[string]interface{}{
+			"available_quantity": gorm.Expr("available_quantity - ?", quantity),
+		},
+	)
 }
 
 // ReserveStock moves stock from available -> reserved.
@@ -272,20 +260,7 @@ func (r *InventoryRepository) ReserveStock(
 	quantity int,
 ) error {
 
-	return r.db.WithContext(ctx).
-		Model(&models.Inventory{}).
-		Where("product_id = ?", productID).
-		Updates(map[string]interface{}{
-			"available_quantity": gorm.Expr(
-				"available_quantity - ?",
-				quantity,
-			),
-			"reserved_quantity": gorm.Expr(
-				"reserved_quantity + ?",
-				quantity,
-			),
-		}).
-		Error
+	return r.ReserveStockTx(ctx, r.db, productID, quantity)
 }
 
 // ReserveStockTx moves stock from available -> reserved inside a transaction.
@@ -296,20 +271,12 @@ func (r *InventoryRepository) ReserveStockTx(
 	quantity int,
 ) error {
 
-	return tx.WithContext(ctx).
-		Model(&models.Inventory{}).
-		Where("product_id = ?", productID).
-		Updates(map[string]interface{}{
-			"available_quantity": gorm.Expr(
-				"available_quantity - ?",
-				quantity,
-			),
-			"reserved_quantity": gorm.Expr(
-				"reserved_quantity + ?",
-				quantity,
-			),
-		}).
-		Error
+	return guardedUpdate(ctx, tx, productID, "available_quantity", quantity,
+		map[string]interface{}{
+			"available_quantity": gorm.Expr("available_quantity - ?", quantity),
+			"reserved_quantity":  gorm.Expr("reserved_quantity + ?", quantity),
+		},
+	)
 }
 
 // ReleaseReservedStock moves stock from reserved -> available.
@@ -319,20 +286,7 @@ func (r *InventoryRepository) ReleaseReservedStock(
 	quantity int,
 ) error {
 
-	return r.db.WithContext(ctx).
-		Model(&models.Inventory{}).
-		Where("product_id = ?", productID).
-		Updates(map[string]interface{}{
-			"available_quantity": gorm.Expr(
-				"available_quantity + ?",
-				quantity,
-			),
-			"reserved_quantity": gorm.Expr(
-				"reserved_quantity - ?",
-				quantity,
-			),
-		}).
-		Error
+	return r.ReleaseReservedStockTx(ctx, r.db, productID, quantity)
 }
 
 // ReleaseReservedStockTx moves stock from reserved -> available inside a transaction.
@@ -343,20 +297,12 @@ func (r *InventoryRepository) ReleaseReservedStockTx(
 	quantity int,
 ) error {
 
-	return tx.WithContext(ctx).
-		Model(&models.Inventory{}).
-		Where("product_id = ?", productID).
-		Updates(map[string]interface{}{
-			"available_quantity": gorm.Expr(
-				"available_quantity + ?",
-				quantity,
-			),
-			"reserved_quantity": gorm.Expr(
-				"reserved_quantity - ?",
-				quantity,
-			),
-		}).
-		Error
+	return guardedUpdate(ctx, tx, productID, "reserved_quantity", quantity,
+		map[string]interface{}{
+			"available_quantity": gorm.Expr("available_quantity + ?", quantity),
+			"reserved_quantity":  gorm.Expr("reserved_quantity - ?", quantity),
+		},
+	)
 }
 
 // ConfirmReservedStock deducts reserved stock permanently.
@@ -366,17 +312,7 @@ func (r *InventoryRepository) ConfirmReservedStock(
 	quantity int,
 ) error {
 
-	return r.db.WithContext(ctx).
-		Model(&models.Inventory{}).
-		Where("product_id = ?", productID).
-		UpdateColumn(
-			"reserved_quantity",
-			gorm.Expr(
-				"reserved_quantity - ?",
-				quantity,
-			),
-		).
-		Error
+	return r.ConfirmReservedStockTx(ctx, r.db, productID, quantity)
 }
 
 // ConfirmReservedStockTx deducts reserved stock permanently inside a transaction.
@@ -387,15 +323,38 @@ func (r *InventoryRepository) ConfirmReservedStockTx(
 	quantity int,
 ) error {
 
-	return tx.WithContext(ctx).
+	return guardedUpdate(ctx, tx, productID, "reserved_quantity", quantity,
+		map[string]interface{}{
+			"reserved_quantity": gorm.Expr("reserved_quantity - ?", quantity),
+		},
+	)
+}
+
+// guardedUpdate applies a stock decrement only while guardColumn still
+// holds at least quantity. The check and the write are one statement, so
+// concurrent callers cannot drive a quantity negative even without a
+// prior row lock.
+func guardedUpdate(
+	ctx context.Context,
+	db *gorm.DB,
+	productID uuid.UUID,
+	guardColumn string,
+	quantity int,
+	updates map[string]interface{},
+) error {
+
+	result := db.WithContext(ctx).
 		Model(&models.Inventory{}).
-		Where("product_id = ?", productID).
-		UpdateColumn(
-			"reserved_quantity",
-			gorm.Expr(
-				"reserved_quantity - ?",
-				quantity,
-			),
-		).
-		Error
+		Where("product_id = ? AND "+guardColumn+" >= ?", productID, quantity).
+		Updates(updates)
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return ErrInsufficientQuantity
+	}
+
+	return nil
 }

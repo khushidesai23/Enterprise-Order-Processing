@@ -178,6 +178,12 @@ func (s *Service) CreateOrder(
 		); err != nil {
 
 			tx.Rollback()
+			if errors.Is(err, repository.ErrInsufficientQuantity) {
+
+				return nil, ErrInsufficientStock
+
+			}
+
 			return nil, err
 		}
 
@@ -762,6 +768,9 @@ func (s *Service) confirmReservedInventory(
 			item.ProductID,
 			item.Quantity,
 		); err != nil {
+			if errors.Is(err, repository.ErrInsufficientQuantity) {
+				return ErrInsufficientReserved
+			}
 			return err
 		}
 
@@ -810,6 +819,9 @@ func (s *Service) releaseReservedInventory(
 			item.ProductID,
 			item.Quantity,
 		); err != nil {
+			if errors.Is(err, repository.ErrInsufficientQuantity) {
+				return ErrInsufficientReserved
+			}
 			return err
 		}
 
