@@ -46,3 +46,5 @@ tmp/
 # locust/config.py
 locust/.venv-locust/
 locust/__pycache__/
+locust/results/
+locust/scenarios/__pycache__/
