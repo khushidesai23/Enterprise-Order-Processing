@@ -4,6 +4,8 @@ package repository_test
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
@@ -85,4 +87,50 @@ func TestCategoryProductInventoryIntegration(t *testing.T) {
 
 	_, err = categoryRepo.GetByID(ctx, category.ID)
 	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+}
+
+func TestInventoryDecrementsNeverGoNegative(t *testing.T) {
+	db := testintegration.NewTestDatabase(t)
+	testintegration.CleanupDatabase(t, db)
+	creator := testintegration.GormCreator(db.DB)
+	ctx := context.Background()
+	inventoryRepo := repository.NewInventoryRepository(db.DB)
+
+	category := testintegration.CreateCategoryFixture(t, creator, "Decrement Category")
+	product := testintegration.CreateProductFixture(t, creator, category.ID, "Decrement Product", "SKU-DECREMENT-1", 1)
+	testintegration.CreateInventoryFixture(t, creator, product.ID, 10, 0)
+
+	const requests = 50
+	results := make(chan error, requests)
+	var workers sync.WaitGroup
+	workers.Add(requests)
+	for range requests {
+		go func() {
+			defer workers.Done()
+			results <- inventoryRepo.RemoveStock(ctx, product.ID, 1)
+		}()
+	}
+	workers.Wait()
+	close(results)
+
+	var removed, rejected int
+	for err := range results {
+		switch {
+		case err == nil:
+			removed++
+		case errors.Is(err, repository.ErrInsufficientQuantity):
+			rejected++
+		default:
+			t.Errorf("unexpected error: %v", err)
+		}
+	}
+	assert.Equal(t, 10, removed)
+	assert.Equal(t, requests-10, rejected)
+
+	inventory, err := inventoryRepo.GetByProductID(ctx, product.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 0, inventory.AvailableQuantity)
+
+	assert.ErrorIs(t, inventoryRepo.ReleaseReservedStock(ctx, product.ID, 1), repository.ErrInsufficientQuantity)
+	assert.ErrorIs(t, inventoryRepo.ConfirmReservedStock(ctx, product.ID, 1), repository.ErrInsufficientQuantity)
 }

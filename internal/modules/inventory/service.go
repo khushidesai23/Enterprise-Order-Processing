@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
@@ -284,6 +285,9 @@ func (s *Service) RemoveStock(
 		productID,
 		quantity,
 	); err != nil {
+		if errors.Is(err, repository.ErrInsufficientQuantity) {
+			return nil, ErrInsufficientStock
+		}
 		return nil, err
 	}
 
@@ -333,6 +337,9 @@ func (s *Service) ReserveStock(
 		productID,
 		quantity,
 	); err != nil {
+		if errors.Is(err, repository.ErrInsufficientQuantity) {
+			return nil, ErrInsufficientStock
+		}
 		return nil, err
 	}
 
@@ -390,6 +397,9 @@ func (s *Service) ReleaseReservedStock(
 		productID,
 		quantity,
 	); err != nil {
+		if errors.Is(err, repository.ErrInsufficientQuantity) {
+			return nil, ErrInsufficientReserved
+		}
 		return nil, err
 	}
 
@@ -448,6 +458,9 @@ func (s *Service) ConfirmReservedStock(
 		productID,
 		quantity,
 	); err != nil {
+		if errors.Is(err, repository.ErrInsufficientQuantity) {
+			return nil, ErrInsufficientReserved
+		}
 		return nil, err
 	}
 
