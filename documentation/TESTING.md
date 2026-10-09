@@ -12,6 +12,11 @@ go test ./...
 
 These cover module-level behavior such as services and supporting components.
 
+> Database-backed tests (integration, e2e) are skipped unless
+> `ENABLE_DB_TESTS=1` is set. They use the `postgres-test` container on port
+> 5433 and truncate its tables, so run packages one at a time (`-p 1`), e.g.
+> `ENABLE_DB_TESTS=1 go test -p 1 -tags=integration ./internal/repository ./internal/modules/order`.
+
 ### Repository Integration Tests
 
 Run:
@@ -67,4 +72,4 @@ Locust scripts are available under:
 locust/
 ```
 
-Use them to generate concurrent traffic while observing metrics, traces, and application behavior.
+Use them to generate concurrent traffic while observing metrics, traces, and application behavior. See [LOAD_TESTING.md](../LOAD_TESTING.md) for scenarios, commands and recorded results.

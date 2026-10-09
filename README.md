@@ -4,7 +4,7 @@ A backend-focused, enterprise-style Order Processing Platform built to demonstra
 
 The project is implemented as a **modular monolith** in Go. It currently provides transactional order processing, inventory reservation, Razorpay payment integration, authentication, testing, OpenTelemetry tracing, Prometheus metrics, Grafana visualization, structured logging, Docker-based local infrastructure, and GitHub Actions CI.
 
-> The project is intentionally evolving in phases. Advanced event-driven capabilities such as Debezium, Kafka, TimescaleDB, notification consumers, analytics consumers, and audit consumers are planned for later phases.
+> The project is intentionally evolving in phases. A PostgreSQL -> Debezium -> Kafka CDC pipeline runs locally and is consumed and measured by the API; business consumers (notifications, analytics, audit) and TimescaleDB are planned for later phases.
 
 ---
 
@@ -39,14 +39,18 @@ The project is implemented as a **modular monolith** in Go. It currently provide
 - Docker Compose local infrastructure
 - Unit, repository integration, service integration, and end-to-end tests
 - GitHub Actions CI
-- Locust load-testing scripts
+- Locust load-test suite with seeded fixtures, load shapes and a Prometheus exporter
+- Provisioned Grafana load-testing dashboard (HTTP, latency, errors, runtime, DB pool, CDC, Jaeger slow traces)
+- PostgreSQL CDC with Debezium and Kafka (connector config, setup SQL, instrumented consumer)
+
+### Partially implemented
+
+- CDC consumer: events are decoded, counted and logged; no business processing yet
+- Authorization: every business route requires a JWT, but there are no roles or ownership checks (see Known limitations)
 
 ### Planned
 
-- PostgreSQL CDC
-- Debezium
-- Kafka/event streaming
-- Event consumers
+- Event consumers with business logic
 - Notification service
 - Analytics service
 - Audit/event service
@@ -256,7 +260,11 @@ Cancellation and refund-related behavior are handled according to the current bu
 │   ├── config.go
 │   ├── collector-config.yaml
 │   ├── prometheus.yml
+│   ├── debezium/
+│   │   ├── postgres-connector.json
+│   │   └── setup.sql
 │   └── grafana/
+│       ├── dashboards/
 │       └── provisioning/
 │
 ├── docs/
@@ -266,7 +274,6 @@ Cancellation and refund-related behavior are handled according to the current bu
 │
 ├── documentation/
 │   ├── ARCHITECTURE.md
-│   ├── DEVELOPMENT.md
 │   ├── OBSERVABILITY.md
 │   ├── ROADMAP.md
 │   └── TESTING.md
@@ -285,6 +292,9 @@ Cancellation and refund-related behavior are handled according to the current bu
 │   │   ├── health.go
 │   │   ├── migrate.go
 │   │   └── postgres.go
+│   │
+│   ├── messaging/
+│   │   └── kafka/
 │   │
 │   ├── models/
 │   │
@@ -306,8 +316,10 @@ Cancellation and refund-related behavior are handled according to the current bu
 │       └── mocks/
 │
 ├── locust/
-│   ├── config.py
-│   └── locustfile.py
+│   ├── seed.py
+│   ├── requirements.txt
+│   ├── locustfile.py
+│   └── scenarios/
 │
 ├── payment-demo/
 │   ├── index.html
@@ -319,6 +331,7 @@ Cancellation and refund-related behavior are handled according to the current bu
 │   └── telemetry/
 │
 ├── docker-compose.yml
+├── LOAD_TESTING.md
 ├── Makefile
 ├── go.mod
 └── README.md
@@ -337,7 +350,7 @@ Install:
 Optional:
 
 - ngrok for Razorpay webhook testing
-- Python environment for Locust
+- Python 3.13 for Locust (`locust/requirements.txt`)
 
 ---
 
@@ -359,11 +372,15 @@ APP_ENV=development
 APP_PORT=8080
 
 DB_HOST=localhost
-DB_PORT=5432
+DB_PORT=5432   # use e.g. 5434 if a native PostgreSQL already listens on 5432
 DB_USER=postgres
 DB_PASSWORD=postgres
 DB_NAME=order_processing
 DB_SSLMODE=disable
+
+KAFKA_BROKERS=localhost:9092
+KAFKA_CDC_TOPIC=order-processing.public.categories,order-processing.public.orders,order-processing.public.inventories
+KAFKA_CDC_GROUP_ID=order-processing-cdc-consumer
 
 JWT_SECRET=replace-with-a-secure-secret
 JWT_EXPIRATION=24h
@@ -394,6 +411,12 @@ TEST_JWT_SECRET=test-jwt-secret
 
 Do not commit real secrets.
 
+> **Port 5432 conflict (Windows):** if a native PostgreSQL service also
+> listens on 5432, `localhost:5432` reaches it instead of the Docker
+> container, so the API writes to a database Debezium never sees. Set
+> `DB_PORT=5434` in `.env`, then `docker compose up -d postgres`.
+> Check with `Get-NetTCPConnection -LocalPort 5432 -State Listen`.
+
 ---
 
 # Start Local Infrastructure
@@ -406,12 +429,14 @@ docker compose up -d
 
 Current Compose services:
 
-- PostgreSQL
-- PostgreSQL test database
-- Jaeger
-- OpenTelemetry Collector
-- Prometheus
-- Grafana
+- PostgreSQL 16 (`wal_level=logical`)
+- PostgreSQL test database (port 5433)
+- Kafka 3.2 (KRaft, host port 9092)
+- Debezium / Kafka Connect 3.2 (REST on 8083)
+- Jaeger 1.76.0
+- OpenTelemetry Collector 0.158.0
+- Prometheus v3.11.3
+- Grafana 13.0.1
 
 Check service status:
 
@@ -458,6 +483,20 @@ The server starts on:
 ```text
 http://localhost:8080
 ```
+
+## Local URLs
+
+| Interface | URL | Notes |
+|---|---|---|
+| API | http://localhost:8080/api/v1 | `GET /api/v1/ready` checks the DB |
+| Swagger UI | http://localhost:8080/swagger/index.html | |
+| API metrics | http://localhost:8080/metrics | |
+| Grafana | http://localhost:3000/d/order-processing-load-testing | admin / admin (local only) |
+| Prometheus | http://localhost:9090 | targets: http://localhost:9090/targets |
+| Jaeger | http://localhost:16686 | service `enterprise-order-processing` |
+| Kafka Connect (Debezium) | http://localhost:8083/connectors | REST API |
+| Locust web UI | http://localhost:8089 | when started without `--headless` |
+| Locust metrics | http://localhost:9646/metrics | while Locust runs |
 
 ---
 
@@ -559,15 +598,13 @@ Expose the local application:
 ngrok http 8080
 ```
 
-Use the generated public URL in the Razorpay dashboard with the project's configured payment webhook endpoint.
-
-Example:
+Use the generated public URL in the Razorpay dashboard with the payment webhook endpoint:
 
 ```text
-https://<your-ngrok-domain>/<payment-webhook-path>
+https://<your-ngrok-domain>/api/v1/payments/webhook
 ```
 
-The application verifies Razorpay webhook signatures before processing webhook data.
+The application verifies the `X-Razorpay-Signature` header before processing webhook data and deduplicates on `X-Razorpay-Event-Id` (requests without an event ID are rejected with 400).
 
 ---
 
@@ -632,7 +669,10 @@ Jaeger UI:
 http://localhost:16686
 ```
 
-See [documentation/OBSERVABILITY.md](documentation/OBSERVABILITY.md) for details.
+Grafana also has a provisioned Jaeger datasource, and the load-testing
+dashboard lists recent slow traces.
+
+See [documentation/OBSERVABILITY.md](documentation/OBSERVABILITY.md) for the metric catalogue.
 
 ---
 
@@ -652,23 +692,20 @@ Run standard tests:
 go test ./...
 ```
 
-Run repository integration tests:
+Database-backed tests need the `postgres-test` container (port 5433) and
+`ENABLE_DB_TESTS=1`; without it they are skipped. They share one test
+database, so run packages sequentially (`-p 1`):
 
 ```bash
-go test -tags=integration ./internal/repository
+ENABLE_DB_TESTS=1 go test -p 1 -tags=integration ./internal/repository ./internal/modules/order
+ENABLE_DB_TESTS=1 go test -tags=e2e ./internal/test/e2e/...
 ```
 
-Run order service integration tests:
+PowerShell: `$env:ENABLE_DB_TESTS = "1"` first.
 
-```bash
-go test -tags=integration ./internal/modules/order
-```
-
-Run HTTP end-to-end tests:
-
-```bash
-go test -tags=e2e ./internal/test/e2e/...
-```
+The integration suite includes concurrency regressions: 50 concurrent
+orders against 10 units of stock, concurrent cancels of one order,
+opposite-order multi-item orders (deadlock), and concurrent stock removals.
 
 See [documentation/TESTING.md](documentation/TESTING.md).
 
@@ -727,20 +764,39 @@ make clean
 
 # Load Testing
 
-Locust files are available in:
+See [LOAD_TESTING.md](LOAD_TESTING.md) for every scenario, the dashboard
+guide, measured results and troubleshooting. Quick start (PowerShell, API
+running):
 
-```text
-locust/
+```powershell
+cd locust
+python -m venv .venv-locust; .\.venv-locust\Scripts\pip install -r requirements.txt
+.\.venv-locust\Scripts\python seed.py --host http://localhost:8080
+.\.venv-locust\Scripts\locust -f scenarios/smoke.py --host http://localhost:8080 -u 2 -r 2 -t 1m --headless
 ```
 
-They are intended to exercise the application under concurrent HTTP traffic and support performance experimentation during the observability phase.
+`seed.py` creates the load-test user, products and stock and writes
+`locust/loadtest.env` (gitignored), which every scenario reads.
+
+---
+
+# Known limitations
+
+- **No authorization model.** Any authenticated user can list all orders,
+  read or cancel another user's order, set order status (including `PAID`
+  without a payment), adjust inventory, and update or delete users. Roles and
+  ownership checks are needed before this is exposed beyond local use.
+- A failed payment (`payment.failed`) cancels the order, so a later
+  successful retry on the same Razorpay order cannot mark it paid.
+- `BaseModel.BeforeCreate` always assigns a new UUID, so creating a record
+  with a populated association re-IDs that association.
 
 ---
 
 # Documentation
 
 - [Architecture](documentation/ARCHITECTURE.md)
-- [Development Guide](documentation/DEVELOPMENT.md)
+- [Load Testing](LOAD_TESTING.md)
 - [Observability](documentation/OBSERVABILITY.md)
 - [Testing](documentation/TESTING.md)
 - [Roadmap](documentation/ROADMAP.md)

@@ -1,182 +1,397 @@
 # Load Testing and Observability
 
-This guide describes repeatable load testing for the current local development stack. User counts and durations below are **example test targets**, not service-level objectives or production capacity claims. The results section contains only values captured in executed local runs.
+How to run reproducible load tests against the Order Processing API, watch
+them in Grafana/Jaeger, and read the results. Everything here was executed on
+the machine described in [Test environment](#test-environment); numbers are
+local measurements, not capacity claims for any other environment.
 
-| Area | Existing implementation | Load-test relevance | Missing before this work |
-|---|---|---|---|
-| API and business flow | Gin routes for auth, products, categories, inventory, orders and payments; GORM services/repositories and transactional order creation | Scenarios exercise login, reads, order writes and stock contention | No repeatable scenario suite or recorded load results |
-| Database | PostgreSQL, GORM and a configured SQL pool capped at 100 open / 10 idle connections | Transactions, inventory locking and pool pressure determine order correctness and latency | No exported SQL pool gauges/counters; order inventory read lacked a row lock |
-| Metrics and dashboard | Prometheus HTTP/Go process metrics, Prometheus and Grafana services | Correlate request/error/latency behavior and host process state | No DB pool metric collection or dedicated load dashboard |
-| Tracing and logs | OpenTelemetry Gin/GORM instrumentation, OTEL Collector, Jaeger and structured Zap logs | Inspect slow API and SQL spans alongside each run | Runtime trace delivery and span behavior needed validation |
-| Load generation | Locust and a compatibility locustfile | Reuse existing setup for separate workload profiles | No focused scenarios, controlled fixture guidance or result capture |
-| CDC/event pipeline | Kafka, Connect/Debezium and a Kafka reader are configured | CDC behavior could affect write load if functional | No registered connector, meaningful event processing, or CDC throughput/lag metrics |
+## Status
 
-## 1. Current architecture
+| Area | Status |
+|---|---|
+| Locust scenarios: smoke, baseline, read-heavy, mixed, order-heavy, contention, auth, spike, stress, recovery, sustained | Implemented and run (results below) |
+| Controlled test data (`locust/seed.py`) with stock reset and an exhaustion guard | Implemented and used for every run |
+| Grafana dashboard (provisioned), Prometheus scrape, Locust exporter, Jaeger datasource | Implemented; every dashboard query checked against live data |
+| HTTP, Go runtime, DB pool (`go_sql_*`) and CDC metrics | Implemented and verified |
+| CDC: PostgreSQL -> Debezium -> Kafka -> API consumer | Running and measured; the consumer records and logs events but has no business logic |
+| Debezium/Kafka Connect JMX metrics, PostgreSQL server metrics | Not implemented (inspect by command, see [CDC](#cdc-setup)) |
+| Distributed Locust (master/workers) | Not tested; the exporter only runs on the master/local runner |
 
-The API is a Go 1.26.2 modular monolith using Gin, JWT middleware, GORM, and PostgreSQL. Product, category, inventory, order, payment, and auth modules use service and repository layers. Order creation creates the order, checks inventory, reserves stock, and writes order items in one GORM transaction. The SQL pool is configured for at most 100 open and 10 idle connections. `GET /api/v1/orders` and `/orders/me` accept `page` and `limit` (default 1 and 50; limit capped at 100) and return one page in the existing list response shape.
+## Test environment
 
-Routes used by the scenarios are `POST /api/v1/auth/login`, `GET /api/v1/products`, `GET /api/v1/categories`, `GET /api/v1/orders`, `POST /api/v1/orders`, and `GET /api/v1/health`. Business routes require a bearer token. Use Swagger at `/swagger/index.html` to confirm the API contract when the application changes.
+| Item | Value |
+|---|---|
+| Host | Windows 11 Pro, single machine; Locust, the API and Docker Desktop share the CPU |
+| API | `bin/server.exe` built from this branch, run on the host (`APP_ENV=development`, Gin debug mode, LOG_LEVEL=debug) |
+| PostgreSQL | `postgres:16` in Docker Desktop (WSL2), host port 5434, `max_connections=100` |
+| Kafka / Debezium | `quay.io/debezium/kafka:3.2` (KRaft) / `quay.io/debezium/connect:3.2` |
+| Observability | Prometheus v3.11.3 (API and Locust scraped every 5s), Grafana 13.0.1, Jaeger 1.76.0, OTel Collector 0.158.0 |
+| Locust | 2.46.3, Python 3.13, `wait_time = between(1, 3)` per user |
 
-## 2. Observability architecture and known gaps
+Two properties of this environment dominate some results and are called out
+where they matter:
 
-- Gin middleware exports `order_processing_http_requests_total`, `order_processing_http_request_duration_seconds` and `order_processing_http_requests_in_flight`, labelled by method, route and status. Route labels use Gin's registered route template.
-- The Prometheus Go client also exposes Go runtime and process metrics. Prometheus scrapes `host.docker.internal:8080` every 15 seconds.
-- The application periodically copies `database/sql` pool stats into `order_processing_db_*` metrics. Open, in-use and idle are gauges; wait count and wait duration are cumulative counters. Collection runs every 15 seconds and once at startup/shutdown, not per request.
-- Gin OTEL middleware creates server spans; `otelgorm` instruments GORM database activity without recording query variables. OTLP gRPC goes through the Collector to Jaeger.
-- Zap logs are structured and written to stdout.
-- Compose contains Kafka, Kafka Connect/Debezium, PostgreSQL logical WAL settings, and an application Kafka reader. The repository does **not** register a Debezium connector, and the consumer currently logs decoded events rather than performing business processing. Kafka throughput, consumer lag, and Debezium metrics are not exported by the application; CDC is not an end-to-end validated pipeline.
-- Order creation reads the product inventory row with `FOR UPDATE` inside its transaction before checking and reserving stock. This prevents concurrent orders from passing the stock check against the same stale quantity.
-- Order-list endpoints use bounded pagination after sustained-load traces showed that reading all order history made query and response cost grow with the entire database.
+1. **Slow, erratic fsync on the Docker Desktop volume.** `pg_test_fsync` in the
+   container measured 1.6 ms per single `fdatasync` but 9.5 ms for two 8 kB
+   writes and 6-60 ms for `open_sync`. Commit latency, and therefore order
+   P95/P99, is bound by this.
+2. **Occasional Docker VM I/O stalls of 10-20 s.** During one run Kafka logged
+   `Exceptionally slow controller event ... took 12309 ms` while PostgreSQL
+   queries in the same VM stalled. See [Findings](#findings-and-optimizations).
+3. **The machine entered Modern Standby once (13:48-14:38).** The first
+   stress run is only valid up to its 300-user step and the sustained run
+   started on wake was discarded; both were re-run after restarting Docker
+   Desktop, whose IPv6 port forwarding had broken on resume.
 
-The provisioned Grafana dashboard is **Order Processing - Load Testing** in the Performance folder. It has route, method, and status selectors backed by labels that exist in the HTTP metrics. It includes traffic, latency, errors, Go runtime, in-flight requests and DB pool panels. The CDC row documents the missing metrics rather than showing invented data.
+## 1. Start the stack
 
-## 3. Prerequisites and startup
-
-Install Docker Compose, Go 1.26.2 or compatible, Python 3, and Locust (`python -m pip install locust`). Configure `.env` from `.env.example`; use local-only values and do not put real secrets in source control. The application config currently requires Razorpay settings and a JWT secret even for these local load runs.
-
-From the repository root in PowerShell:
+PowerShell, from the repository root:
 
 ```powershell
+Copy-Item .env.example .env        # first time only; then edit secrets/ports
 docker compose up -d
-docker compose ps
-go run ./cmd/server
+docker compose ps                  # postgres, kafka, debezium healthy
+go build -o bin\server.exe .\cmd\server
+.\bin\server.exe                   # or: go run ./cmd/server
 ```
 
-In another terminal, set test credentials without putting them in the Locust source:
+Check:
 
 ```powershell
-$env:LOCUST_EMAIL = 'load-test-user@example.com'
-$env:LOCUST_PASSWORD = '<local test account password>'
-$env:LOCUST_PRODUCT_IDS = '<comma-separated UUIDs of dedicated high-stock products>'
-Set-Location locust
+curl.exe http://localhost:8080/api/v1/ready          # {"success":true,...}
+start http://localhost:9090/targets                  # order-processing-api UP
 ```
 
-Create a dedicated test account and product set through the existing API/Swagger or a local seed process. For mixed, spike, and sustained workloads, `LOCUST_PRODUCT_IDS` can spread orders across stocked products; provision enough aggregate stock for expected orders and replenish between runs. Order-heavy runs can use one high-stock product or a product pool. The load suite will not mutate business fixtures automatically. For contention, set only `LOCUST_PRODUCT_ID` to one dedicated product with known starting stock (for example 100 units), record initial available and reserved quantities, and do not run other writers against it. Do not point these scenarios at production data.
+> **Port 5432 conflict.** If a native PostgreSQL (e.g. the
+> `postgresql-x64-18` Windows service) listens on 5432, `localhost:5432`
+> reaches it instead of the container: the API then writes to a database that
+> Debezium never reads, and results describe a different server. Check with
+> `Get-NetTCPConnection -LocalPort 5432 -State Listen`; if the owner is not
+> Docker, set `DB_PORT=5434` in `.env` and run `docker compose up -d postgres`.
+> Results recorded before this branch ran against the native server.
 
-Endpoints: API `http://localhost:8080`, Prometheus `http://localhost:9090`, Grafana `http://localhost:3000`, Jaeger `http://localhost:16686`, Kafka Connect REST `http://localhost:8083`. The dashboard datasource uses the repository's provisioned Prometheus datasource. Grafana's current Compose credentials are development defaults; change them before exposing this stack beyond a local machine.
+### Local URLs
 
-## 4. Locust scenarios
+| Interface | URL |
+|---|---|
+| API | http://localhost:8080/api/v1 |
+| Swagger UI | http://localhost:8080/swagger/index.html |
+| API metrics | http://localhost:8080/metrics |
+| Grafana dashboard | http://localhost:3000/d/order-processing-load-testing (admin/admin, local only) |
+| Prometheus | http://localhost:9090 (targets: /targets) |
+| Jaeger | http://localhost:16686 (service `enterprise-order-processing`) |
+| Kafka Connect REST | http://localhost:8083/connectors |
+| Locust web UI | http://localhost:8089 (when not `--headless`) |
+| Locust exporter | http://localhost:9646/metrics (while Locust runs) |
 
-Run the following from the `locust` directory; `--host` selects the API. `-r` is users spawned per second and `-t` is run duration. User counts, waits and durations are workload inputs, not pass/fail thresholds.
+### CDC setup
+
+Needed once per PostgreSQL volume, after the API has started once (its
+AutoMigrate creates the tables):
 
 ```powershell
-locust -f scenarios/smoke.py --host http://localhost:8080 --users 1 --spawn-rate 1 --run-time 2m --headless --csv results/smoke
+Get-Content config\debezium\setup.sql | docker exec -i order-postgres psql -U postgres -d order_processing
+curl.exe -X POST -H "Content-Type: application/json" --data "@config/debezium/postgres-connector.json" http://localhost:8083/connectors
+curl.exe http://localhost:8083/connectors/order-processing-postgres-connector/status   # RUNNING / RUNNING
 ```
 
-| Scenario | File | Purpose and example invocation |
+`setup.sql` is idempotent (role, grants, publication). The connector config
+uses local development credentials (`cdc_user` / `cdc_password`).
+`KAFKA_CDC_TOPIC` lists the topics the API consumes; topics appear when a
+table first changes, and the consumer picks them up without a restart.
+
+## 2. Prepare Locust and test data
+
+```powershell
+cd locust
+python -m venv .venv-locust
+.\.venv-locust\Scripts\pip install -r requirements.txt
+.\.venv-locust\Scripts\python seed.py --host http://localhost:8080
+```
+
+`seed.py` (idempotent, API only) creates or resets:
+
+| Fixture | Default | Used by |
 |---|---|---|
-| Smoke | `scenarios/smoke.py` | One authenticated user; checks health and products. Use the command above, then check `/metrics`, Prometheus target/query, Grafana dashboard and Jaeger traces manually. |
-| Baseline | `scenarios/baseline.py` | Weighted product/category/order reads plus order creation. Example: `locust -f scenarios/baseline.py --host http://localhost:8080 --users 5 --spawn-rate 1 --run-time 5m --headless --csv results/baseline`. |
-| Read-heavy | `scenarios/read_heavy.py` | Task weights approximate products 60%, categories 30%, orders 10%. Repeat separately at 5, 10, 25, 50, then 100 users, only proceeding when the prior run remains healthy. Capture a separate CSV prefix per level. |
-| Mixed workload | `scenarios/mixed_workload.py` | Authenticates at user startup; task weights are products 5, categories 3, orders 2, creates 1. Requires an existing high-stock load-test product and replenishment. |
-| Order-heavy | `scenarios/order_heavy.py` | Repeated one-unit `POST /orders`; track stock, DB pool waits and SQL spans. Requires product ID and sufficient stock. |
-| Inventory contention | `scenarios/inventory_contention.py` | Concurrent one-unit orders against the same product. Run at 10, 25, 50, then 100 users with a fresh/known stock state each time. The expected `400 insufficient stock available` response is counted as an expected rejection rather than a Locust failure; other errors remain failures and the 400 status remains visible in Prometheus. Confirm final available + reserved quantities and successful order quantities from the database. |
-| Auth load | `scenarios/auth_load.py` | Repeats login to isolate password hashing/authentication. Login is the only request task; compare CPU and latency with baseline. Do not weaken hashing. |
-| Spike | `scenarios/spike_test.py` with `scenarios/mixed_workload.py` | Illustrative shape: 10, 100, then 300 users. Run: `locust -f scenarios/mixed_workload.py,scenarios/spike_test.py --host http://localhost:8080 --headless --csv results/spike`. Tune values for the local host. |
-| Sustained | `scenarios/sustained_load.py` | Example: `locust -f scenarios/sustained_load.py --host http://localhost:8080 --users 100 --spawn-rate 10 --run-time 30m --headless --csv results/sustained`. Observe during the run and several minutes after. |
-| Stress progression | `scenarios/mixed_workload.py` | Run separate measured stages such as 50, 100, 200, 300, 500 users. Continue only while the host/database remain healthy. These are illustrative test steps, not capacity assertions. |
+| User `loadtest@example.com` | password from `LOCUST_PASSWORD`, else generated | all authenticated scenarios |
+| 10 products `LOADTEST-0001..0010` | 1,000,000 available, 0 reserved each (`--stock`) | baseline, mixed, order-heavy, spike, stress, recovery, sustained |
+| Product `LOADTEST-CONTENTION` | 100 available (`--contention-stock`) | inventory contention |
 
-For read-heavy steps, use this PowerShell pattern and change `$users` and `$name` for each level:
+It writes `locust/loadtest.env` (gitignored), which every scenario loads, so
+no credentials or IDs are typed by hand. **Re-run `seed.py` before each
+measured run** to start from a known stock level.
+
+Inventory exhaustion cannot silently distort a run:
+
+- at test start every scenario checks that each product it uses has at least
+  `LOCUST_MIN_STOCK` (default 10,000) units and aborts otherwise
+  (`LOCUST_ALLOW_LOW_STOCK=1` overrides);
+- outside the contention scenario, an "insufficient stock" response is a
+  failure labelled *inventory exhausted, re-run seed.py*;
+- available/reserved stock of every product is logged before and after the run.
+
+## 3. Scenarios
+
+Run from `locust/` with `.\.venv-locust\Scripts\locust` (shown as `locust`).
+Add `--csv results/<name>` to keep CSVs (`results/` is gitignored). Drop
+`--headless` to use the web UI at http://localhost:8089.
+
+| Scenario | Command | Mix and intent |
+|---|---|---|
+| Smoke | `locust -f scenarios/smoke.py --host http://localhost:8080 -u 2 -r 2 -t 1m --headless` | health + products; verifies wiring, metrics and traces |
+| Baseline | `locust -f scenarios/baseline.py --host http://localhost:8080 -u 5 -r 1 -t 3m --headless` | products 5 : categories 3 : orders list 1 : create 1 |
+| Read-heavy | `locust -f scenarios/read_heavy.py --host http://localhost:8080 -u 50 -r 5 -t 3m --headless` | products 6 : categories 3 : orders list 1 |
+| Mixed | `locust -f scenarios/mixed_workload.py --host http://localhost:8080 -u 50 -r 5 -t 4m --headless` | products 5 : categories 3 : orders list 2 : create 1 |
+| Order-heavy | `locust -f scenarios/order_heavy.py --host http://localhost:8080 -u 50 -r 5 -t 3m --headless` | one-unit orders spread over the 10 products |
+| Inventory contention | `python seed.py; locust -f scenarios/inventory_contention.py --host http://localhost:8080 -u 100 -r 20 -t 2m --headless` | one-unit orders on one 100-unit product; rejections are expected and counted as success |
+| Auth | `locust -f scenarios/auth_load.py --host http://localhost:8080 -u 25 -r 5 -t 2m --headless` | repeated logins (bcrypt cost isolation) |
+| Spike | `locust -f scenarios/mixed_workload.py,scenarios/spike_test.py --host http://localhost:8080 --headless` | 20 users 2 min -> 300 users 3 min -> 20 users 3 min |
+| Stress | `locust -f scenarios/mixed_workload.py,scenarios/stress_test.py --host http://localhost:8080 --headless` | 25/50/100/200/300/400 users, 3 min per step |
+| Recovery | `locust -f scenarios/mixed_workload.py,scenarios/recovery_test.py --host http://localhost:8080 --headless` | 20 users 2 min -> 400 users 5 min -> 20 users 5 min |
+| Sustained | `locust -f scenarios/sustained_load.py --host http://localhost:8080 -u 100 -r 10 -t 15m --headless` | mixed reads/writes at constant load |
+
+Shapes accept `LOCUST_SHAPE_SCALE` (e.g. `0.5`) to scale user counts on a
+smaller machine. Every authenticated user logs in once at start, so ramps also
+create a burst of bcrypt work. Verify contention correctness in the database:
 
 ```powershell
-$users = 5
-$name = "read-$users"
-locust -f scenarios/read_heavy.py --host http://localhost:8080 --users $users --spawn-rate 1 --run-time 5m --headless --csv "results/$name"
+$p = (Select-String -Path loadtest.env -Pattern 'LOCUST_CONTENTION_PRODUCT_ID=(.*)').Matches.Groups[1].Value
+docker exec order-postgres psql -U postgres -d order_processing -c "select available_quantity, reserved_quantity from inventories where product_id='$p'" -c "select sum(oi.quantity) units, count(distinct oi.order_id) orders from order_items oi join orders o on o.id=oi.order_id where oi.product_id='$p' and o.status<>'CANCELLED'"
 ```
 
-Locust starts a login request when each authenticated user starts. For read-only runs this means login load is concentrated at ramp-up; `auth_load.py` is the dedicated repeated-login scenario. Keep Locust's user count, spawn rate, wait-time behavior and duration in each result record.
+Expected: available 0, reserved 100, 100 units in 100 orders.
 
-## 5. Prometheus queries
+## 4. What to watch
 
-Use the dashboard selectors to filter actual method/route/status labels. Equivalent useful queries:
+Dashboard: **Performance / Order Processing - Load Testing**, refresh 5s.
+Route/method/status selectors filter the HTTP panels; the slow-trace table has
+its own threshold selector.
+
+| Row | Panels | Read it as |
+|---|---|---|
+| Load generator | Locust users; client vs server request rate; client failures; client vs server P95 | Server rate below client rate, or client P95 far above server P95, means time is lost before the handler (accept queue, connection resets, write timeouts) |
+| Traffic | rate, by route, by status | Mix should match the scenario weights |
+| Latency | P50/P95/P99; P95 by route | Which route degrades first |
+| Errors | 5xx by route; 4xx by route/status; 5xx % | Contention 400s belong here, not in 5xx |
+| Go runtime | CPU cores, RSS/heap, goroutines, in-flight | CPU near core count: CPU-bound (auth). In-flight rising while CPU flat: waiting on I/O |
+| Database pool | open/in-use/idle/max; waits/s; wait seconds/s | In-use at max plus waits: pool-bound. In-use high without waits: requests hold connections while PostgreSQL works (commit/fsync) |
+| CDC | events by table/op; commit->consume P50/P95; consumer lag and errors | Lag that rises with load: pipeline falling behind. A lag spike right after an API restart is the consumer-group rejoin |
+| Slow traces | Jaeger search above the threshold | Open a trace; the gap after the last SQL statement in a transaction is the COMMIT |
+
+Per scenario:
+
+| Scenario | Primary graphs |
+|---|---|
+| Smoke/baseline | everything non-empty, 0 failures, targets UP |
+| Read-heavy | P95 by route, CPU, in-flight |
+| Mixed/sustained | P95 by route over time, RSS and goroutines (leaks show as steady growth), CDC lag |
+| Order-heavy | POST /orders P95/P99, pool in-use vs waits, slow traces |
+| Contention | 4xx rate (expected), 5xx (must be 0), POST /orders P99, DB invariant query |
+| Auth | CPU (bcrypt), login P95 |
+| Spike/recovery | client vs server rate and P95, pool, then time for P95/in-flight to return to the first stage's level |
+| Stress | the step where server rate stops rising or P95/failures jump |
+
+### Prometheus queries
 
 ```promql
-sum(rate(order_processing_http_requests_total[1m]))
-sum by (route) (rate(order_processing_http_requests_total[1m]))
-sum by (status) (rate(order_processing_http_requests_total[1m]))
-sum(rate(order_processing_http_requests_total{status=~"5.."}[1m]))
-100 * sum(rate(order_processing_http_requests_total{status=~"5.."}[1m])) / clamp_min(sum(rate(order_processing_http_requests_total[1m])), 1e-9)
-histogram_quantile(0.50, sum by (le) (rate(order_processing_http_request_duration_seconds_bucket[5m])))
-histogram_quantile(0.95, sum by (le) (rate(order_processing_http_request_duration_seconds_bucket[5m])))
-histogram_quantile(0.99, sum by (le) (rate(order_processing_http_request_duration_seconds_bucket[5m])))
-sum(order_processing_http_requests_in_flight)
-go_goroutines
-go_memstats_alloc_bytes
-go_memstats_heap_alloc_bytes
-process_resident_memory_bytes
-rate(process_cpu_seconds_total[1m])
-order_processing_db_open_connections
-order_processing_db_in_use_connections
-order_processing_db_idle_connections
-rate(order_processing_db_wait_count_total[1m])
-rate(order_processing_db_wait_duration_seconds_total[1m])
+sum(rate(order_processing_http_requests_total{job="order-processing-api"}[1m]))
+histogram_quantile(0.95, sum by (le, route) (rate(order_processing_http_request_duration_seconds_bucket{job="order-processing-api"}[1m])))
+sum by (status) (rate(order_processing_http_requests_total{job="order-processing-api"}[1m]))
+rate(process_cpu_seconds_total{job="order-processing-api"}[1m])
+process_resident_memory_bytes{job="order-processing-api"}
+go_goroutines{job="order-processing-api"}
+go_sql_in_use_connections{job="order-processing-api"}
+rate(go_sql_wait_duration_seconds_total{job="order-processing-api"}[1m])
+increase(go_sql_max_idle_closed_total{job="order-processing-api"}[15m])
+sum by (table, operation) (rate(order_processing_cdc_events_total[1m]))
+histogram_quantile(0.95, sum by (le) (rate(order_processing_cdc_end_to_end_lag_seconds_bucket[1m])))
+sum(locust_users)
+sum by (name) (rate(locust_requests_total{result="failure"}[1m]))
 ```
 
-Wait count and wait duration are counters. Their `rate` indicates newly accumulated waiting over time; use `increase(...[test window])` for total waiting during a selected interval. A zero wait rate alone does not prove that the database is healthy; interpret pool saturation alongside request latency and traces.
+Always filter `go_*`/`process_*` by `job`: the Prometheus server exports the
+same metric names (the earlier dashboard mixed them in).
 
-## 6. Grafana, Jaeger and test correlation
+### Jaeger
 
-For every run, record the wall-clock start/end time and use the same time range in Locust CSV, Grafana and Jaeger. In Grafana, choose the dashboard and filter route/method/status as needed. Use the Locust request names and API route labels to compare throughput, percentiles, status codes, process CPU/memory, goroutines, in-flight requests and DB pool usage.
+Service `enterprise-order-processing`, operation e.g. `POST /api/v1/orders`,
+Min Duration `500ms`, lookback matching the run. SQL spans show the statement
+(no bind values). `COMMIT` has no span: the empty gap between the last
+statement of a transaction and the next span is commit time.
 
-In Jaeger, select the configured OTEL service name, narrow to the run window, and inspect slow `POST /api/v1/orders` or `POST /api/v1/auth/login` traces. Expand child spans and compare total server time with GORM/PostgreSQL spans. Long server duration with short database spans points toward application work or another dependency; long SQL spans suggest investigating query execution or lock waits. Confirm these interpretations from traces and metrics before naming a bottleneck. SQL instrumentation is configured, but actual trace delivery must be verified during the smoke run.
+## 5. Results
 
-The current application has no explicit transaction-duration or PostgreSQL lock-wait Prometheus metric. GORM spans may show SQL duration, but do not assume a span identifies lock wait specifically. For stronger proof, collect PostgreSQL `pg_stat_activity`/lock observations during the controlled contention test or add appropriately scoped instrumentation in a later measured change.
+Captured on this branch with the environment above. P50/P95/P99 are
+Locust-measured milliseconds over the whole run (all requests, logins
+included). Resource columns are Prometheus maxima over the run window (5s
+scrape; CPU = 20s rate). Raw CSVs: `locust/results/v2-*` (local only).
 
-## 7. Kafka / Debezium observations
-
-Compose includes Kafka and Connect, but no connector is automatically registered in this project and the application consumer only logs supported Debezium event types. Therefore order load does not currently prove the PostgreSQL WAL → Debezium → Kafka → processing pipeline. No event throughput, consumer lag or Debezium error metrics are claimed or shown. A future CDC validation needs an explicit connector config/registration step, a meaningful consumer, and source/connector/topic/consumer measurements.
-
-## 8. Result capture and comparison
-
-Do not fill these fields from estimates. Save Locust CSV output and record Grafana/Jaeger observations for every executed run. Use `n/a` only when a metric is unavailable and explain why.
-
-| Scenario | Users | RPS | P50 | P95 | P99 | Errors | CPU | Memory | Goroutines | In-flight | DB wait |
+| Run | Users | RPS | P50 | P95 | P99 | Failures | API CPU (cores) | RSS MB | Goroutines | Pool in-use (max) | Pool waits |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Smoke | 1 | 0.51 | 5 ms | 27 ms | 120 ms | 0/29 | n/a | n/a | n/a | n/a | 0 observed |
-| Baseline | 5 | 2.47 | 4 ms | 24 ms | 88 ms | 0/293 | n/a | n/a | n/a | n/a | 0 observed |
-| Read-heavy | 5 | 2.44 | 5 ms | 13 ms | 86 ms | 0/143 | n/a | n/a | n/a | n/a | 0 observed |
-| Read-heavy | 10 | 4.83 | 3 ms | 11 ms | 79 ms | 0/282 | n/a | n/a | n/a | n/a | 0 observed |
-| Read-heavy | 25 | 12.26 | 4 ms | 12 ms | 91 ms | 0/728 | n/a | n/a | n/a | n/a | 0 observed |
-| Read-heavy | 50 | 24.20 | 4 ms | 12 ms | 120 ms | 0/1,431 | n/a | n/a | n/a | n/a | 0 observed |
-| Read-heavy | 100 | 48.35 | 4 ms | 15 ms | 150 ms | 0/2,871 | n/a | 27.9 MB heap | 36 | n/a | 0 observed |
-| Mixed | 25 | 12.27 | 4 ms | 20 ms | 80 ms | 0/1,458 | n/a | n/a | n/a | n/a | 0 observed |
-| Order-heavy | 25 | 12.44 | 8 ms | 25 ms | 77 ms | 0/1,480 | n/a | n/a | n/a | n/a | 0 observed |
-| Inventory contention, before fix | 100 | 48.30 | 5 ms | 23 ms | 130 ms | 0/2,861* | n/a | n/a | n/a | n/a | 0 observed |
-| Inventory contention, after fix | 100 | 48.53 | 6 ms | 60 ms | 160 ms | 0/2,829* | n/a | n/a | n/a | n/a | n/a |
-| Auth | 25 | 11.62 | 84 ms | 130 ms | 210 ms | 0/1,381 | n/a | n/a | n/a | n/a | n/a |
-| Spike, 10→100→300 users across 12 SKUs | 300 peak | 38.37 | 260 ms | 5.7 s | 8.8 s | 0/6,938 Locust failures | 2.61 CPU cores peak | 1,003 MB RSS peak | 705 peak | n/a | +6,815 waits / +2,071 s over observed 3 min window |
-| Spike 10→100→300, paginated (12 SKUs) | 300 peak | 49.57 | 13 ms | 4.0 s | 5.7 s | 0/8,996 | 1.62 cores peak | 130 MB RSS peak | 581 peak | 147 peak | 3,502 waits / 832 s; 84 open / 82 in-use peak |
-| Sustained 100, before pagination (18.4 min, interrupted) | 100 | 47.34 | 8 ms | 350 ms | 2.2 s | 0/52,437 | n/a | 1,689 MB RSS peak | 268 peak | 83 peak | 0 waits; 37 open / 28 in-use peak |
-| Sustained 100, paginated (20 min) | 100 | 48.58 | 6 ms | 28 ms | 170 ms | 81/58,230 (0.139%) | 0.58 cores peak | 82.8 MB RSS peak | 200 peak | 83 peak | 0 waits; 10 open / 5 in-use peak |
-| Stress beyond 300 | — | — | — | — | — | Not run: the 300-user spike saturated the DB pool | — | — | — | — | — |
+| Smoke | 2 | 1.0 | 5 | 24 | 58 | 0 / 60 | - | 73 | 38 | 0 | 0 |
+| Baseline | 5 | 2.5 | 5 | 23 | 71 | 0 / 445 | 0.23 | 72 | 41 | 1 | 0 |
+| Read-heavy | 50 | 24.7 | 6 | 23 | 94 | 0 / 4,429 | 0.41 | 76 | 91 | 2 | 0 |
+| Mixed | 50 | 24.6 | 6 | 27 | 91 | 0 / 5,907 | 0.47 | 78 | 90 | 2 | 0 |
+| Order-heavy, before optimization | 50 | 22.0 | 57 | 1,100 | 3,300 | 0 / 3,981 | 0.59 | 82 | 195 | 48 | 0 |
+| Order-heavy, `synchronous_commit=off` (diagnostic only) | 50 | 24.6 | 26 | 98 | 190 | 0 / 2,457 | 0.71 | 77 | 100 | 4 | 0 |
+| Order-heavy, after optimization | 50 | 23.5 | 13 | 420 | 2,700 | 0 / 4,221 | 0.45 | 79 | 207 | 49 | 0 |
+| Inventory contention | 100 | 41.1 | 10 | 220 | 21,000 | 91 / 4,899 (see below) | 0.95 | 85 | 346 | 100 | 0 |
+| Auth | 25 | 11.8 | 100 | 170 | 320 | 0 / 1,415 | 1.42 | 75 | 66 | 0 | 0 |
+| Spike 20 -> 300 -> 20 (before pool/login fix) | 300 peak | 60.9 | 13 | 200 | 1,700 | 57 / 29,276 | 2.19 | 94 | 553 | 65 | 740 (65 s) |
+| Recovery 20 -> 400 -> 20 (before pool/login fix) | 400 peak | 85.4 | 9 | 210 | 1,800 | 10 / 61,496 | 2.84 | 128 | 613 | 90 | 2,058 (646 s) |
+| Stress 25 -> 400 (after all fixes) | 400 peak | 86.8 | 15 | 110 | 1,000 | 12 / 93,768 (HTTP 504 during a disk stall) | 1.37 | 103 | 588 | 78 | 1,369 (57 s) |
+| Sustained 15 min (after all fixes) | 100 | 48.0 | 8 | 74 | 1,400 | 65 / 43,178 (HTTP 504 during disk stalls) | 0.78 | 93 | 259 | 45 | 65 (4 s) |
+| Spike 20 -> 300 -> 20, after pool/login fix | 300 peak | 61.1 | 13 | 150 | 1,300 | **0** / 29,326 | 2.07 | 102 | 355 | 15 (open 80) | 824 (112 s), all during the ramp |
 
-Times are from Locust CSVs (percentiles are milliseconds). The spike used Locust's shaped 10→100→300 user stages and 12 dedicated products. Prometheus resource values are sampled maxima over each run; CPU is the maximum 30-second rate. The pre-pagination sustained run was stopped after 18.4 minutes as order-history latency and memory climbed. The post-pagination run completed its 20-minute target. Its 81 failures were transport disconnects/incomplete response bodies clustered within about four seconds; Prometheus recorded no 5xx responses, and app logs show successful HTTP responses for sampled affected requests. Their precise transport cause remains unproven. In one matching trace, Jaeger showed a 20.3-second HTTP span while the access log recorded 8 ms for the same trace; this timing discrepancy also needs investigation. The post-run API returned healthy/ready. The 100-user contention-after-fix aggregate includes the login ramp; database assertions are the correctness check: available 0, reserved 100, 100 committed units. Before the fix, the same starting stock produced available −2, reserved 102, and 102 committed units. `*` Contention's expected insufficient-stock rejections are marked successful by Locust; the failures column is the Locust failure count, not the number of rejected business requests.
+`POST /orders` alone: before 56/1,100/3,300 ms (P50/P95/P99), after
+13/430/2,700 ms, with `synchronous_commit=off` 26/80/160 ms.
 
-### Findings and follow-up
+Run-specific notes:
 
-- **Inventory correctness (high confidence):** the 100-user same-product run committed 102 units from 100 available, leaving −2 available and 102 reserved. Adding a transaction-scoped `FOR UPDATE` inventory row lock fixed the race. The rerun and a DB-backed 50-way integration regression both confirmed stock never went below zero and only the available number of orders succeeded.
-- **Capacity ceiling at spike (high confidence for pool pressure):** before pagination, the 300-user multi-SKU spike sampled all 100 SQL connections in use, accumulated about 6,815 waits and 2,071 seconds of aggregate wait duration, and reached 38.37 RPS at P95/P99 5.7/8.8 seconds. After order-list pagination, the same spike reached 49.57 RPS and P95/P99 4.0/5.7 seconds; pool maxima were 84 open / 82 in use, with about 3,502 waits and 832 seconds of aggregate wait duration. RSS peaked near 130 MB and no HTTP 5xx or Locust failures occurred. The database pool did not hit its 100-connection ceiling, but waiting and multi-second tail latency remain at 300 users. The service returned healthy/ready and wait counters returned to zero in subsequent idle samples. Further stress beyond 300 users remains untested.
-- **Unbounded order-history reads (high confidence):** before pagination, Jaeger captured a 7.58-second `GET /orders` trace with a 1.24 MB response. The orders query returned 8,423 rows and its `order_items` preload also read 8,423 rows; those SQL spans took about 7.49 and 4.93 seconds. Added `page`/`limit` parameters (default 50, maximum 100) to both order-list endpoints. In the 20-minute same-workload rerun, Locust `GET /orders` P95 fell from 1.6 seconds to 31 ms; a Jaeger page trace showed 50 orders and 50 items, SQL spans under 9 ms, and a 7.5 KB response. The run still had a brief cluster of transport failures described above, which needs a separate investigation.
-- **CDC remains unvalidated:** no Debezium connector is registered and the consumer does not perform order processing, as described above.
+- **Contention:** the database invariant held: available 0, reserved 100,
+  exactly 100 units in 100 orders, no negative stock. The 91 failures and the
+  21 s P99 come from a Docker VM stall during the run (next section), not
+  from the contention logic.
+- **Recovery:** with 400 users the server sustained ~198 req/s with
+  server-side P95 mostly 20-90 ms. Two P95 peaks: 3 s during the ramp (400
+  logins at 50/s saturate CPU on bcrypt; login P50 2.8 s) and 4 s at +240 s,
+  which coincided with integration tests I ran in the same Docker VM, so treat
+  that peak as interference. After the drop to 20 users, server P95 was back
+  at the baseline level (23 ms vs 22 ms median) within the first 15 s window,
+  and in-flight requests and pool in-use returned to 0. RSS stayed ~95 MB.
+  The 10 failures were HTTP 500 caused by PostgreSQL `too many clients`
+  (26 occurrences in the log), fixed afterwards; the recovery run itself was
+  not repeated (the post-fix spike covers the same failure mode).
+- **Stress per step** (server-side, last 120 s of each 3-minute step;
+  Prometheus):
 
-For each run additionally record environment/host resources, API revision, dataset and initial/final stock, exact users/spawn/duration, endpoint mix, HTTP status distribution, Prometheus/Grafana observations, slow trace IDs and span durations, Kafka/CDC observations or why unavailable, suspected bottleneck, supporting evidence, confidence, and conclusion. Compare the same workload and data setup before/after any optimization.
+  | Users | Server req/s | Server P50/P95/P99 ms | Client P95 ms | API CPU | Pool in-use max | Pool waits | 5xx |
+  |---:|---:|---|---:|---:|---:|---:|---:|
+  | 25 | 12.4 | 5 / 33 / 138 | 39 | 0.19 | 1 | 0 | 0 |
+  | 50 | 24.9 | 5 / 41 / 84 | 47 | 0.31 | 2 | 0 | 0 |
+  | 100 | 46.8 | 5 / 48 / 1,521 | 56 | 0.42 | 23 | 14 | 10 |
+  | 200 | 98.8 | 7 / 46 / 87 | 51 | 0.54 | 5 | 0 | 0 |
+  | 300 | 148.0 | 9 / 53 / 94 | 78 | 0.73 | 9 | 0 | 0 |
+  | 400 | 188.0 | 17 / 100 / 243 | 217 | 0.83 | 21 | 295 | 0 |
 
-## 9. Bottleneck identification method
+  Throughput tracks offered load (users / 2 s mean think time) up to 300
+  users. At 400 users the server handled 188 of ~200 offered req/s, client
+  P95 was twice server P95 and the pool started queueing: the first signs of
+  saturation on this machine (Locust shares the CPU, so part of the client
+  gap is the load generator). The 100-user step's P99 and all 12 failures
+  are one stall at 15:12:50-59: Kafka logged a 7.7 s stalled write at
+  15:12:45 and PostgreSQL logged `canceling statement due to user request`
+  for inventory updates queued behind a stalled commit, i.e. the 10 s request
+  deadline cancelled them, released their locks and returned 504. The same
+  stall before the deadline fix produced silent connection drops.
+- **Sustained (15 min, 100 users):** no leak trend: RSS 75-92 MB and
+  goroutines 135-140 flat across the run (2-minute samples). All 65
+  failures are 504s in three minutes (15:29, 15:31, 15:35) that coincide
+  exactly with bursts of Kafka `Exceptionally slow controller event`
+  disk stalls; PostgreSQL logged 30 deadline cancellations. Outside those
+  windows server P95 was 24-32 ms.
+- **Spike before vs after the pool/login fix** (same workload and Locust
+  code): failures 57 -> 0, overall P95/P99 200/1,700 -> 150/1,300 ms,
+  `POST /orders` P95/P99 330/1,900 -> 240/890 ms, max in-flight 72 -> 27,
+  max goroutines 553 -> 355. All pool waits in the fixed run fall in the
+  single 30 s window where the pool grew from 4 to 80 connections during the
+  300-user ramp; afterwards the 80 idle connections were reused with no
+  waits.
+- **CDC:** steady-state commit->consume P95 was 1-5 s at 50-74 events/s with
+  consumer lag ~0. Two artefacts to ignore: a 28 s P95 right after an API
+  restart (the killed consumer's 30 s group session must expire before
+  partitions are reassigned), and 300 s for the first 90 s of the fixed
+  spike run (draining a 2,895-message backlog after a Docker restart).
 
-1. Establish smoke and baseline without optimizing first.
-2. Increase one workload variable at a time; record throughput, latency percentiles, failures and resource metrics.
-3. Identify the first symptom (for example, throughput flattening, error growth, pool waits, CPU saturation, memory/goroutine growth, or slow SQL spans).
-4. Gather evidence from Locust, Prometheus/Grafana and representative Jaeger traces in the same time window. For locking claims, collect PostgreSQL lock/activity evidence.
-5. State observation, evidence, likely cause, affected component and confidence separately. A latency increase alone does not prove a cause.
-6. Make one justified change only after the bottleneck is supported by evidence, then rerun the same test and compare against its baseline.
-7. After spike/sustained tests, continue watching for several minutes to assess recovery. This remains a local environment result, not production capacity.
+## Findings and optimizations
 
-## 10. Limitations and future improvements
+Each item lists evidence, change, and the measured effect. Commits are on
+`feature/load-testing`.
 
-- The table above records the executed local runs. Raw Locust CSVs are kept under the ignored `locust/results/` directory and are local evidence, not committed artifacts.
-- Load identities and product IDs must be supplied through environment variables; test data setup/replenishment is external and controlled by the operator.
-- Database pool samples are periodic at 15 seconds; short bursts can occur between samples.
-- No application Kafka/CDC throughput or lag metrics, registered Debezium connector, or functional event processing are currently available.
-- Validate Prometheus target health, dashboard provisioning, and trace arrival locally; configuration files alone do not establish runtime health.
-- Inventory concurrency has been checked against database state before and after adding the transaction row lock. Rerun the contention test after changes to order or inventory transaction behavior.
-- Add CDC metrics/connector lifecycle, PostgreSQL lock/wait visibility, explicit result archival, and repeatable local fixture setup as follow-up work if those paths are in scope.
+1. **App was not using the database Debezium reads (environment).** The API's
+   connections went to a native PostgreSQL 18 service on 5432
+   (`Get-NetTCPConnection` owner `postgresql-x64-18`); Docker's postgres only
+   received Debezium. Moved the container to 5434 via `.env`. All results
+   above use the container; results recorded before this branch do not.
+2. **Inventory and order races (correctness).** DB-backed tests reproduced
+   double release on concurrent cancels (2 of 10 succeeded; reserved 0 instead
+   of 3) and deadlocks for multi-item orders listing products in opposite
+   order (39 of 40 failed, SQLSTATE 40P01). Fixed by locking the order row and
+   taking inventory locks in product-ID order; inventory decrements became
+   single guarded `UPDATE ... WHERE qty >= ?` statements.
+3. **Order latency: commit fsync + 14 statements per order.** Order-heavy:
+   P95 1.1 s with 48 connections in use and no pool waits; `pg_stat_activity`
+   showed `IO:WALSync` and `idle in transaction`; slow traces had all
+   statements done by ~150 ms and then a ~500-620 ms gap (the commit). An A/B
+   run with `synchronous_commit=off` (reverted immediately) cut P99 from
+   2.9 s to 160 ms, proving commit flush dominates the tail. Code change:
+   CreateOrder went from 14 statements to 5 (lean product lookup outside the
+   transaction, total inserted directly, guarded update instead of
+   lock+update, response built in memory). Effect: P50 56 -> 13 ms, P95
+   1,100 -> 430 ms, P99 3,300 -> 2,700 ms. The remaining tail is the volume's
+   fsync; on a real disk this would differ. `synchronous_commit=off` was *not*
+   kept, because it trades durability.
+4. **Silent transport failures (root cause of the earlier unexplained
+   cluster).** Contention run: 91 Locust `HTTP 0` failures within 3 s; the
+   server logged exactly 91 requests with 17-19 s handler latency and normal
+   400 responses; Kafka logged a 12.3 s stalled write at the same moment.
+   Handlers outlived `http.Server.WriteTimeout` (15 s), so Go closed the
+   connections after the handler "succeeded". Added a 10 s request deadline:
+   stalled queries are cancelled (verified: query returns at the deadline, row
+   lock released) and the client gets a 504 that also shows in 5xx metrics.
+5. **Pool larger than the server allows, and idle churn.** Spike: two logins
+   failed with 401 (then those users' every request), and recovery: ten 500s.
+   Jaeger showed `FATAL: sorry, too many clients already (SQLSTATE 53300)`:
+   `MaxOpenConns=100` equalled `max_connections=100` while Debezium holds 3
+   more. `MaxIdleConns=10` closed 716 connections during the spike, each later
+   reopened. Pool is now configurable, default 80 open / 80 idle / 5 min idle
+   timeout.
+6. **Login error handling.** Any lookup error became 401, hiding the pool
+   failure above; an unknown email panicked and returned 500. Unknown email is
+   now 401 (with a dummy bcrypt compare for constant timing) and
+   infrastructure errors are logged and returned as 500/504.
+7. **Measurement fixes.** Dashboard runtime panels mixed the Prometheus
+   server's own process metrics in (no `job` filter); `/metrics` scrapes were
+   counted as API traffic and were the only slow samples in a smoke run
+   (server P95 0.49 s vs client 21 ms); DB pool stats were sampled every 15 s.
+   All fixed.
+
+Not changed, with reasons:
+
+- **bcrypt cost.** Auth is CPU-bound (~0.12 core-seconds per login), so ramps
+  with hundreds of first logins queue on CPU. That is the price of password
+  hashing; reduce login frequency (token reuse) rather than the cost.
+- **Pool size beyond the server limit.** Raising `max_connections` would not
+  help here: the bottleneck under order load is commit flush, not connections.
+
+## 6. Troubleshooting
+
+| Symptom | Cause / fix |
+|---|---|
+| `Stock below LOCUST_MIN_STOCK` and the run quits | Run `python seed.py` (resets stock). |
+| `Set LOCUST_EMAIL and LOCUST_PASSWORD` | Run `seed.py` from `locust/`; it writes `loadtest.env`. |
+| `seed.py`: login failed, user exists with another password | Set `$env:LOCUST_PASSWORD` to that user's password, or use `--email` for a new user. |
+| Prometheus target `locust` DOWN | Normal when Locust is not running; with Locust running check port 9646 and `LOCUST_METRICS_PORT`. |
+| Target `order-processing-api` DOWN | API not running on the host, or Docker cannot reach `host.docker.internal:8080`. |
+| Grafana dashboard missing or empty | `docker compose restart grafana`; datasource UIDs `PBFA97CFB590B2093` (Prometheus) and `jaeger` must exist (Connections -> Data sources). |
+| CDC panels empty | Connector status (`curl.exe http://localhost:8083/connectors/order-processing-postgres-connector/status`), topics in `KAFKA_CDC_TOPIC`, API using the container DB (port conflict above). |
+| CDC lag spike after restarting the API | Consumer-group rejoin (about 30 s); disappears in steady state. |
+| Locust `HTTP 0` / connection reset clusters | Check the API log for handler latency near 10 s and 504s, and Kafka logs for `Exceptionally slow controller event`: Docker VM stall. |
+| `sorry, too many clients already` | `DB_MAX_OPEN_CONNS` plus other clients exceeds PostgreSQL `max_connections`. |
+| A shaped run lasts far longer than its stages, max response time is minutes | The machine slept (Modern Standby) mid-run: check `Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='Microsoft-Windows-Kernel-Power'}` for events 506/507. Discard the run; keep the machine awake (plugged in, sleep disabled) during long tests. |
+| After waking: `localhost:<port>` for Docker services times out but `127.0.0.1:<port>` works | Docker Desktop's IPv6 port forwarding broke on resume. `docker desktop restart`, then `docker compose up -d`. The API's open DB connections may keep working while new ones hang, so restart the API too. |
+| Jaeger memory keeps growing | In-memory store; capped with `MEMORY_MAX_TRACES` in `docker-compose.yml` (it reached 3 GiB uncapped). |
+| Gevent `RecursionError` when importing scenarios outside Locust | Import `locust` before `requests` (the `locust` CLI already does). |
+| Git Bash: `docker exec ... /kafka/bin/...` resolves to `C:/Program Files/Git/...` | Prefix the command with `MSYS_NO_PATHCONV=1`. |
+
+## 7. Limitations and pending work
+
+- Results are from one Windows machine with Locust, the API and Docker on
+  shared CPU and a slow virtual disk; repeat on the target environment before
+  drawing capacity conclusions.
+- Stage boundaries in the shapes are time-based; compare server-side windows
+  (Prometheus) rather than Locust's cumulative percentiles for recovery.
+- No authorization model (see README *Known limitations*); load tests use one
+  user for all virtual users.
+- No Debezium JMX or PostgreSQL exporter metrics; CDC consumer has no
+  business processing.
