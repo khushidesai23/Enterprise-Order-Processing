@@ -31,6 +31,27 @@ func (r *ProductRepository) Create(
 }
 
 // GetByID returns a product by its ID.
+// GetByIDs returns the products with the given IDs without associations.
+// Missing IDs are simply absent from the result.
+func (r *ProductRepository) GetByIDs(
+	ctx context.Context,
+	ids []uuid.UUID,
+) ([]models.Product, error) {
+
+	var products []models.Product
+
+	err := r.db.WithContext(ctx).
+		Where("id IN ?", ids).
+		Find(&products).
+		Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return products, nil
+}
+
 func (r *ProductRepository) GetByID(
 	ctx context.Context,
 	id uuid.UUID,
