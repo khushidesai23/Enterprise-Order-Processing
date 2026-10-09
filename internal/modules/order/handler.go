@@ -3,6 +3,7 @@ package order
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -133,12 +134,18 @@ func (h *Handler) GetOrder(c *gin.Context) {
 // @Security BearerAuth
 // @Accept json
 // @Produce json
+// @Param page query int false "Page number" default(1) minimum(1)
+// @Param limit query int false "Orders per page" default(50) minimum(1) maximum(100)
 // @Success 200 {object} response.APIResponse
 // @Failure 500 {object} response.APIResponse
 // @Router /orders [get]
 func (h *Handler) GetOrders(c *gin.Context) {
+	page, limit, ok := parseOrderPage(c)
+	if !ok {
+		return
+	}
 
-	orders, err := h.service.GetOrders(c.Request.Context())
+	orders, err := h.service.GetOrders(c.Request.Context(), page, limit)
 	if err != nil {
 
 		response.Error(c, http.StatusInternalServerError, err.Error())
@@ -155,11 +162,17 @@ func (h *Handler) GetOrders(c *gin.Context) {
 // @Security BearerAuth
 // @Accept json
 // @Produce json
+// @Param page query int false "Page number" default(1) minimum(1)
+// @Param limit query int false "Orders per page" default(50) minimum(1) maximum(100)
 // @Success 200 {object} response.APIResponse
 // @Failure 401 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
 // @Router /orders/me [get]
 func (h *Handler) GetOrdersByUser(c *gin.Context) {
+	page, limit, ok := parseOrderPage(c)
+	if !ok {
+		return
+	}
 
 	userID := c.GetString("user_id")
 
@@ -176,6 +189,8 @@ func (h *Handler) GetOrdersByUser(c *gin.Context) {
 	orders, err := h.service.GetOrdersByUser(
 		c.Request.Context(),
 		id,
+		page,
+		limit,
 	)
 
 	if err != nil {
@@ -203,6 +218,32 @@ func (h *Handler) GetOrdersByUser(c *gin.Context) {
 		"orders retrieved successfully",
 		orders,
 	)
+}
+
+func parseOrderPage(c *gin.Context) (int, int, bool) {
+	page := 1
+	limit := DefaultOrderPageSize
+	if value := c.Query("page"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 {
+			response.Error(c, http.StatusBadRequest, "page must be a positive integer")
+			return 0, 0, false
+		}
+		page = parsed
+	}
+	if value := c.Query("limit"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 || parsed > MaxOrderPageSize {
+			response.Error(c, http.StatusBadRequest, "limit must be an integer between 1 and 100")
+			return 0, 0, false
+		}
+		limit = parsed
+	}
+	if page-1 > int(^uint(0)>>1)/limit {
+		response.Error(c, http.StatusBadRequest, "page is too large")
+		return 0, 0, false
+	}
+	return page, limit, true
 }
 
 // PATCH /orders/:id/status

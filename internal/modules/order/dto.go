@@ -6,6 +6,11 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
 )
 
+const (
+	DefaultOrderPageSize = 50
+	MaxOrderPageSize     = 100
+)
+
 type CreateOrderItemRequest struct {
 	ProductID uuid.UUID `json:"product_id" binding:"required"`
 	Quantity  int       `json:"quantity" binding:"required,gt=0"`

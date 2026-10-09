@@ -41,14 +41,20 @@ func (m *orderRepositoryMock) GetByIDTx(ctx context.Context, tx *gorm.DB, id uui
 	return order, args.Error(1)
 }
 
-func (m *orderRepositoryMock) GetAll(ctx context.Context) ([]models.Order, error) {
-	args := m.Called(ctx)
+func (m *orderRepositoryMock) GetAll(ctx context.Context, limit, offset int) ([]models.Order, error) {
+	args := m.Called(ctx, limit, offset)
 	orders, _ := args.Get(0).([]models.Order)
 	return orders, args.Error(1)
 }
 
 func (m *orderRepositoryMock) GetByUserID(ctx context.Context, userID uuid.UUID) ([]models.Order, error) {
 	args := m.Called(ctx, userID)
+	orders, _ := args.Get(0).([]models.Order)
+	return orders, args.Error(1)
+}
+
+func (m *orderRepositoryMock) GetByUserIDPage(ctx context.Context, userID uuid.UUID, limit, offset int) ([]models.Order, error) {
+	args := m.Called(ctx, userID, limit, offset)
 	orders, _ := args.Get(0).([]models.Order)
 	return orders, args.Error(1)
 }
@@ -184,11 +190,24 @@ func TestGetOrdersByUser(t *testing.T) {
 
 	userRepo.On("GetByID", ctx, userID).Return(nil, nil).Once()
 
-	orders, err := service.GetOrdersByUser(ctx, userID)
+	orders, err := service.GetOrdersByUser(ctx, userID, 1, DefaultOrderPageSize)
 
 	require.Error(t, err)
 	assert.Nil(t, orders)
 	assert.ErrorIs(t, err, ErrUserNotFound)
+}
+
+func TestGetOrdersUsesPageLimitAndOffset(t *testing.T) {
+	ctx := context.Background()
+	orderRepo := new(orderRepositoryMock)
+	service := testOrderService(orderRepo, new(mocks.UserRepositoryMock), new(orderProductRepositoryMock), new(orderInventoryRepositoryMock))
+	orderRepo.On("GetAll", ctx, 25, 50).Return([]models.Order{}, nil).Once()
+
+	orders, err := service.GetOrders(ctx, 3, 25)
+
+	require.NoError(t, err)
+	assert.Empty(t, orders)
+	orderRepo.AssertExpectations(t)
 }
 
 func TestTransitionOrderUpdatesStatus(t *testing.T) {

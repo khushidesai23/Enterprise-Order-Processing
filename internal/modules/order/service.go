@@ -27,8 +27,9 @@ type orderRepository interface {
 	Create(ctx context.Context, tx *gorm.DB, order *models.Order) error
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Order, error)
 	GetByIDTx(ctx context.Context, tx *gorm.DB, id uuid.UUID) (*models.Order, error)
-	GetAll(ctx context.Context) ([]models.Order, error)
+	GetAll(ctx context.Context, limit, offset int) ([]models.Order, error)
 	GetByUserID(ctx context.Context, userID uuid.UUID) ([]models.Order, error)
+	GetByUserIDPage(ctx context.Context, userID uuid.UUID, limit, offset int) ([]models.Order, error)
 	UpdateTotalAmount(ctx context.Context, tx *gorm.DB, id uuid.UUID, total float64) error
 	UpdateStatusTx(ctx context.Context, tx *gorm.DB, id uuid.UUID, status models.OrderStatus) error
 }
@@ -303,10 +304,14 @@ func (s *Service) GetOrderForPayment(
 // GetOrders returns all orders.
 func (s *Service) GetOrders(
 	ctx context.Context,
+	page int,
+	pageSize int,
 ) ([]OrderListResponse, error) {
 
 	orders, err := s.orderRepository.GetAll(
 		ctx,
+		pageSize,
+		(page-1)*pageSize,
 	)
 	if err != nil {
 		return nil, err
@@ -319,6 +324,8 @@ func (s *Service) GetOrders(
 func (s *Service) GetOrdersByUser(
 	ctx context.Context,
 	userID uuid.UUID,
+	page int,
+	pageSize int,
 ) ([]OrderListResponse, error) {
 
 	user, err := s.userRepository.GetByID(
@@ -333,9 +340,11 @@ func (s *Service) GetOrdersByUser(
 		return nil, ErrUserNotFound
 	}
 
-	orders, err := s.orderRepository.GetByUserID(
+	orders, err := s.orderRepository.GetByUserIDPage(
 		ctx,
 		userID,
+		pageSize,
+		(page-1)*pageSize,
 	)
 	if err != nil {
 		return nil, err
