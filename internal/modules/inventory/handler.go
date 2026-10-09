@@ -303,6 +303,7 @@ func (h *Handler) RemoveStock(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param productId path string true "Product ID"
+// @Param request body StockOperationRequest true "Stock Operation"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
@@ -323,6 +324,7 @@ func (h *Handler) ReserveStock(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param productId path string true "Product ID"
+// @Param request body StockOperationRequest true "Stock Operation"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
@@ -343,6 +345,7 @@ func (h *Handler) ReleaseReservedStock(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param productId path string true "Product ID"
+// @Param request body StockOperationRequest true "Stock Operation"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
