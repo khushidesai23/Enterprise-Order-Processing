@@ -1,772 +1,245 @@
 # Enterprise Order Processing Platform
 
-A backend-focused, enterprise-style Order Processing Platform built to demonstrate production-oriented backend engineering practices.
+A Go modular monolith for transactional order processing: inventory
+reservation, Razorpay payments with idempotent webhooks, JWT authentication,
+PostgreSQL change data capture (Debezium + Kafka), and a full local
+observability stack (Prometheus, Grafana, OpenTelemetry, Jaeger) with a
+reproducible Locust load-test suite.
 
-The project is implemented as a **modular monolith** in Go. It currently provides transactional order processing, inventory reservation, Razorpay payment integration, authentication, testing, OpenTelemetry tracing, Prometheus metrics, Grafana visualization, structured logging, Docker-based local infrastructure, and GitHub Actions CI.
+Documentation:
 
-> The project is intentionally evolving in phases. A PostgreSQL -> Debezium -> Kafka CDC pipeline runs locally and is consumed and measured by the API; business consumers (notifications, analytics, audit) and TimescaleDB are planned for later phases.
+- **This README**: architecture, setup, API, observability, testing, roadmap.
+- **[LOAD_TESTING.md](LOAD_TESTING.md)**: load-test scenarios, what to watch,
+  measured results and troubleshooting.
+- API contract: Swagger UI at http://localhost:8080/swagger/index.html
+  (`docs/swagger.yaml`).
 
----
+## Status
 
-## Current Implementation Status
-
-### Implemented
-
-- Go backend using Gin
-- PostgreSQL with GORM
-- Modular monolith architecture
-- Repository and service layers
-- JWT authentication and protected APIs
-- User management
-- Category management
-- Product management
-- Inventory management
-- Transaction-safe order creation
-- Inventory reservation lifecycle
-- Razorpay payment integration
-- Checkout signature verification
-- Razorpay webhook signature verification
-- Idempotent webhook handling
-- Payment and order state updates
-- Swagger/OpenAPI documentation
-- Structured logging with Zap
-- OpenTelemetry distributed tracing
-- Jaeger trace visualization
-- Prometheus metrics
-- Grafana provisioning with Prometheus datasource
-- Health and readiness endpoints
-- Graceful shutdown
-- Docker Compose local infrastructure
-- Unit, repository integration, service integration, and end-to-end tests
-- GitHub Actions CI
-- Locust load-test suite with seeded fixtures, load shapes and a Prometheus exporter
-- Provisioned Grafana load-testing dashboard (HTTP, latency, errors, runtime, DB pool, CDC, Jaeger slow traces)
-- PostgreSQL CDC with Debezium and Kafka (connector config, setup SQL, instrumented consumer)
-
-### Partially implemented
-
-- CDC consumer: events are decoded, counted and logged; no business processing yet
-- Authorization: every business route requires a JWT, but there are no roles or ownership checks (see Known limitations)
-
-### Planned
-
-- Event consumers with business logic
-- Notification service
-- Analytics service
-- Audit/event service
-- TimescaleDB
-- Business dashboards
-- Alerting
-- Data retention and archival
-
-See [documentation/ROADMAP.md](documentation/ROADMAP.md) for the implementation roadmap.
-
----
-
-# Architecture
-
-```text
-                                Clients
-                                   |
-                                   v
-                           Gin HTTP Router
-                                   |
-                    +--------------+--------------+
-                    |                             |
-                    v                             v
-             Public Endpoints              JWT Middleware
-                                                  |
-                                                  v
-                                              Handlers
-                                                  |
-                                                  v
-                                               Services
-                                                  |
-                                                  v
-                                             Repositories
-                                                  |
-                                                  v
-                                             PostgreSQL
-                                                  |
-                    +-----------------------------+-----------------------------+
-                    |                             |                             |
-                    v                             v                             v
-              Prometheus Metrics            OpenTelemetry                 Zap Logging
-                    |                             |
-                    v                             v
-               Prometheus                  OTEL Collector
-                    |                             |
-                    v                             v
-                Grafana                        Jaeger
-```
-
-The application is currently a modular monolith. Business modules are separated internally so that selected domains can later be extracted into independent services if required.
-
-For more detail, see [documentation/ARCHITECTURE.md](documentation/ARCHITECTURE.md).
-
----
-
-# Technology Stack
-
-| Area | Technology |
+| Area | State |
 |---|---|
-| Language | Go |
-| HTTP Framework | Gin |
-| ORM | GORM |
-| Database | PostgreSQL 16 |
-| Authentication | JWT |
-| Payment Gateway | Razorpay |
-| Configuration | Viper |
-| Logging | Zap |
-| API Documentation | Swagger / Swaggo |
-| Tracing | OpenTelemetry |
-| Trace Backend | Jaeger |
-| Metrics | Prometheus |
-| Visualization | Grafana |
-| Load Testing | Locust |
-| Containers | Docker Compose |
-| CI | GitHub Actions |
+| Auth, users, categories, products, inventory, orders, payments | Implemented and tested |
+| Transactional order creation with row-locked, deadlock-free inventory reservation | Implemented; covered by concurrency integration tests |
+| Razorpay checkout + webhook signature verification and idempotency | Implemented and tested |
+| Prometheus metrics, provisioned Grafana dashboard, OTel tracing to Jaeger | Implemented and verified under load |
+| CDC: PostgreSQL -> Debezium -> Kafka -> API consumer | Running and measured; the consumer only counts and logs events |
+| Locust suite with seeded data and load shapes | Implemented; results in LOAD_TESTING.md |
+| Authorization (roles, ownership) | **Not implemented**, see [Known limitations](#known-limitations) |
 
----
-
-# Core Business Modules
-
-## Authentication
-
-Provides:
-
-- Login
-- JWT generation
-- Authenticated user lookup
-- Protected API access
-
-## Users
-
-Provides user creation, retrieval, update, and management through the application module structure.
-
-## Categories and Products
-
-Provides catalog organization through category and product modules.
-
-## Inventory
-
-Inventory tracks stock quantities and supports reservation as part of the order workflow.
-
-The current business flow is:
+## Architecture
 
 ```text
-Available Stock
-      |
-      v
-Order Created
-      |
-      v
-Inventory Reserved
-      |
-      +----------------------------+
-      |                            |
-      v                            v
-Payment / Order Continues       Order Cancelled
-      |                            |
-      v                            v
-Reservation Confirmed          Reserved Stock Released
+Client -> Gin router -> middleware -> handler -> service -> repository -> PostgreSQL
+            |                                                             |
+            |  middleware: recovery, OTel, Prometheus, 10s request         | WAL (logical)
+            |  deadline, access log, CORS, JWT (per route)                 v
+            |                                                   Debezium -> Kafka
+            +-- /metrics -> Prometheus -> Grafana                          |
+            +-- OTLP -> OTel Collector -> Jaeger          API CDC consumer <-+
 ```
 
-## Orders
+| Layer | Responsibility |
+|---|---|
+| `internal/app`, `internal/api/routes` | Dependency wiring, middleware, route registration (each module has `RegisterRoutes`) |
+| `internal/api/middleware` | JWT auth, CORS, Prometheus, request deadline, access log |
+| `internal/modules/<module>` | Handler (HTTP), service (business rules), DTOs, mappers, errors |
+| `internal/repository` | All database access (GORM) |
+| `internal/messaging/kafka` | Debezium CDC consumer |
+| `pkg/metrics`, `pkg/telemetry`, `pkg/logger` | Prometheus collectors, OTel tracer, Zap logger |
 
-Order creation is handled transactionally together with the required inventory reservation work so the core business state remains consistent.
+Modules talk to each other through service interfaces, not HTTP, so any
+module can later be extracted without changing callers.
 
-## Payments
+### Consistency rules
 
-Razorpay is integrated for payment processing.
+- **Order creation** runs in one transaction: insert order (with total),
+  reserve stock per item, insert items, commit. Product prices and the user
+  are read before the transaction. Each reservation is a single guarded
+  `UPDATE inventories ... WHERE available_quantity >= ?`, so stock can never
+  go negative, and items are processed in product-ID order so concurrent
+  multi-item orders cannot deadlock.
+- **Status changes** (cancel, payment, shipping, refund) lock the order row
+  (`SELECT ... FOR UPDATE OF orders`), so concurrent transitions are
+  serialized and reserved stock is released or confirmed exactly once.
+- **Webhooks** are deduplicated on the Razorpay event ID (unique
+  `payment_webhooks.payload_id`), and the payment row is locked while its
+  status is applied. A failed application rolls back the webhook record so
+  the gateway's retry is processed again.
+- **Request deadline**: every request context has a 10 s deadline (below the
+  15 s server write timeout). Stalled queries are cancelled and the client
+  receives `504` instead of a silently dropped connection.
 
-The payment flow includes:
+### Order lifecycle
 
 ```text
-Create Order
-      |
-      v
-Reserve Inventory
-      |
-      v
-Create Payment / Razorpay Order
-      |
-      v
-Customer Completes Checkout
-      |
-      v
-Verify Checkout Signature
-      |
-      v
-Razorpay Webhook Received
-      |
-      v
-Verify Webhook Signature
-      |
-      v
-Persist Webhook Idempotently
-      |
-      v
-Update Payment State
-      |
-      v
-Update Order State
+CREATED -> PAYMENT_PENDING -> PAID -> PACKED -> SHIPPED -> DELIVERED
+   |             |             |
+   +-------------+-------------+--> CANCELLED (releases reserved stock)
 ```
 
----
+Shipping confirms (consumes) the reserved stock. `payment.failed` cancels the
+order; refunds cancel non-delivered orders.
 
-# Order Lifecycle
+## Technology
 
-The project models a commerce-style lifecycle:
+Go 1.26, Gin, GORM, PostgreSQL 16, JWT, Razorpay, Viper, Zap, Swaggo,
+OpenTelemetry, OTel Collector 0.158.0, Jaeger 1.76.0, Prometheus v3.11.3,
+Grafana 13.0.1, Kafka 3.2 (KRaft) and Debezium 3.2, Locust 2.46, Docker
+Compose, GitHub Actions.
+
+## Project structure
 
 ```text
-Created
-   |
-   v
-Payment Pending
-   |
-   +--> Payment Failed
-   |
-   v
-Paid
-   |
-   v
-Packed
-   |
-   v
-Shipped
-   |
-   v
-Delivered
+cmd/server/            entry point (config, telemetry, DB, CDC consumer, HTTP server, graceful shutdown)
+config/                config.go, prometheus.yml, collector-config.yaml,
+                       debezium/ (connector + setup.sql), grafana/ (provisioning + dashboard)
+docs/                  generated Swagger
+internal/api/          handlers (health), middleware, response, routes
+internal/app/          router and dependency wiring
+internal/database/     connection pool, migrations, health
+internal/messaging/    Kafka CDC consumer
+internal/models/       GORM models
+internal/modules/      auth, user, category, product, inventory, order, payment
+internal/repository/   data access
+internal/test/         e2e/, integration/ (DB fixtures and harness), mocks/
+locust/                seed.py, scenarios/, requirements.txt
+payment-demo/          local Razorpay checkout page
+pkg/                   logger, metrics, telemetry, utils, validator
 ```
 
-Cancellation and refund-related behavior are handled according to the current business rules and payment/inventory lifecycle.
+## Getting started
 
----
+Prerequisites: Go (version in `go.mod`), Docker with Compose, Git. Optional:
+Python 3.13 for Locust, ngrok for webhook testing.
 
-# Project Structure
-
-```text
-.
-├── .github/
-│   └── workflows/
-│       └── ci.yml
-│
-├── cmd/
-│   └── server/
-│       └── main.go
-│
-├── config/
-│   ├── config.go
-│   ├── collector-config.yaml
-│   ├── prometheus.yml
-│   ├── debezium/
-│   │   ├── postgres-connector.json
-│   │   └── setup.sql
-│   └── grafana/
-│       ├── dashboards/
-│       └── provisioning/
-│
-├── docs/
-│   ├── docs.go
-│   ├── swagger.json
-│   └── swagger.yaml
-│
-├── documentation/
-│   ├── ARCHITECTURE.md
-│   ├── OBSERVABILITY.md
-│   ├── ROADMAP.md
-│   └── TESTING.md
-│
-├── internal/
-│   ├── api/
-│   │   ├── handlers/
-│   │   ├── middleware/
-│   │   ├── response/
-│   │   └── routes/
-│   │
-│   ├── app/
-│   │   └── router.go
-│   │
-│   ├── database/
-│   │   ├── health.go
-│   │   ├── migrate.go
-│   │   └── postgres.go
-│   │
-│   ├── messaging/
-│   │   └── kafka/
-│   │
-│   ├── models/
-│   │
-│   ├── modules/
-│   │   ├── auth/
-│   │   ├── user/
-│   │   ├── category/
-│   │   ├── product/
-│   │   ├── inventory/
-│   │   ├── order/
-│   │   └── payment/
-│   │
-│   ├── repository/
-│   │
-│   └── test/
-│       ├── e2e/
-│       ├── integration/
-│       ├── helpers/
-│       └── mocks/
-│
-├── locust/
-│   ├── seed.py
-│   ├── requirements.txt
-│   ├── locustfile.py
-│   └── scenarios/
-│
-├── payment-demo/
-│   ├── index.html
-│   └── app.js
-│
-├── pkg/
-│   ├── logger/
-│   ├── metrics/
-│   └── telemetry/
-│
-├── docker-compose.yml
-├── LOAD_TESTING.md
-├── Makefile
-├── go.mod
-└── README.md
+```powershell
+Copy-Item .env.example .env      # then set JWT_SECRET and Razorpay test keys
+docker compose up -d             # PostgreSQL, test DB, Kafka, Debezium, OTel, Jaeger, Prometheus, Grafana
+go run ./cmd/server              # or: go build -o bin/server.exe ./cmd/server; .\bin\server.exe
+curl.exe http://localhost:8080/api/v1/ready
 ```
 
----
+One-time CDC setup (after the API has started once and migrated the schema):
 
-# Local Prerequisites
-
-Install:
-
-- Go version defined by `go.mod`
-- Docker and Docker Compose
-- Git
-
-Optional:
-
-- ngrok for Razorpay webhook testing
-- Python 3.13 for Locust (`locust/requirements.txt`)
-
----
-
-# Configuration
-
-Copy the example environment file:
-
-```bash
-cp .env.example .env
+```powershell
+Get-Content config\debezium\setup.sql | docker exec -i order-postgres psql -U postgres -d order_processing
+curl.exe -X POST -H "Content-Type: application/json" --data "@config/debezium/postgres-connector.json" http://localhost:8083/connectors
 ```
 
-Configure the application values in `.env`.
+On Linux/macOS the same steps work with `cp`, `cat ... |` and `curl`; a
+`Makefile` wraps the common commands (`make run`, `make test`, `make test-db`,
+`make swagger`, ...).
 
-The current application expects values for:
+### Configuration
 
-```env
-APP_NAME=Enterprise Order Processing
-APP_ENV=development
-APP_PORT=8080
+All settings come from environment variables, optionally loaded from `.env`
+(see `.env.example`). Notable ones:
 
-DB_HOST=localhost
-DB_PORT=5432   # use e.g. 5434 if a native PostgreSQL already listens on 5432
-DB_USER=postgres
-DB_PASSWORD=postgres
-DB_NAME=order_processing
-DB_SSLMODE=disable
-
-KAFKA_BROKERS=localhost:9092
-KAFKA_CDC_TOPIC=order-processing.public.categories,order-processing.public.orders,order-processing.public.inventories
-KAFKA_CDC_GROUP_ID=order-processing-cdc-consumer
-
-JWT_SECRET=replace-with-a-secure-secret
-JWT_EXPIRATION=24h
-
-LOG_LEVEL=debug
-
-RAZORPAY_KEY_ID=your_razorpay_test_key
-RAZORPAY_KEY_SECRET=your_razorpay_test_secret
-RAZORPAY_WEBHOOK_SECRET=your_razorpay_webhook_secret
-
-OTEL_SERVICE_NAME=enterprise-order-processing
-OTEL_SERVICE_VERSION=1.0.0
-OTEL_ENVIRONMENT=development
-OTEL_EXPORTER_OTLP_ENDPOINT=localhost:4317
-
-TEST_DB_HOST=localhost
-TEST_DB_PORT=5433
-TEST_DB_USER=postgres
-TEST_DB_PASSWORD=postgres
-TEST_DB_NAME=order_processing_test
-TEST_DB_SSLMODE=disable
-
-TEST_RAZORPAY_KEY_ID=rzp_test_key
-TEST_RAZORPAY_KEY_SECRET=rzp_test_secret
-TEST_RAZORPAY_WEBHOOK_SECRET=rzp_test_webhook_secret
-TEST_JWT_SECRET=test-jwt-secret
-```
-
-Do not commit real secrets.
-
-> **Port 5432 conflict (Windows):** if a native PostgreSQL service also
-> listens on 5432, `localhost:5432` reaches it instead of the Docker
-> container, so the API writes to a database Debezium never sees. Set
-> `DB_PORT=5434` in `.env`, then `docker compose up -d postgres`.
-> Check with `Get-NetTCPConnection -LocalPort 5432 -State Listen`.
-
----
-
-# Start Local Infrastructure
-
-Start all Docker services:
-
-```bash
-docker compose up -d
-```
-
-Current Compose services:
-
-- PostgreSQL 16 (`wal_level=logical`)
-- PostgreSQL test database (port 5433)
-- Kafka 3.2 (KRaft, host port 9092)
-- Debezium / Kafka Connect 3.2 (REST on 8083)
-- Jaeger 1.76.0
-- OpenTelemetry Collector 0.158.0
-- Prometheus v3.11.3
-- Grafana 13.0.1
-
-Check service status:
-
-```bash
-docker compose ps
-```
-
-View logs:
-
-```bash
-docker compose logs -f
-```
-
-Stop infrastructure:
-
-```bash
-docker compose down
-```
-
----
-
-# Run the Application
-
-Install dependencies:
-
-```bash
-go mod tidy
-```
-
-Run the API:
-
-```bash
-go run ./cmd/server
-```
-
-Or use:
-
-```bash
-make run
-```
-
-The server starts on:
-
-```text
-http://localhost:8080
-```
-
-## Local URLs
-
-| Interface | URL | Notes |
+| Variable | Default | Notes |
 |---|---|---|
-| API | http://localhost:8080/api/v1 | `GET /api/v1/ready` checks the DB |
-| Swagger UI | http://localhost:8080/swagger/index.html | |
-| API metrics | http://localhost:8080/metrics | |
-| Grafana | http://localhost:3000/d/order-processing-load-testing | admin / admin (local only) |
-| Prometheus | http://localhost:9090 | targets: http://localhost:9090/targets |
-| Jaeger | http://localhost:16686 | service `enterprise-order-processing` |
-| Kafka Connect (Debezium) | http://localhost:8083/connectors | REST API |
-| Locust web UI | http://localhost:8089 | when started without `--headless` |
-| Locust metrics | http://localhost:9646/metrics | while Locust runs |
+| `DB_PORT` | 5432 | **Windows:** if a native PostgreSQL service listens on 5432, `localhost:5432` reaches it instead of the container. Use `5434` and `docker compose up -d postgres`. Check with `Get-NetTCPConnection -LocalPort 5432 -State Listen`. |
+| `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` / `DB_CONN_MAX_IDLE_TIME` | 80 / 80 / 5m | Keep open connections below PostgreSQL `max_connections` (100) minus Debezium/admin connections. |
+| `KAFKA_CDC_TOPIC` | categories, orders, inventories topics | Comma-separated `order-processing.public.<table>` topics. |
+| `JWT_SECRET`, `RAZORPAY_*` | none | Required; the app refuses to start without them. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `localhost:4317` | OTel Collector. |
 
----
+Never commit `.env`.
 
-# Available Endpoints
+### Local URLs
 
-## Application
-
-| Endpoint | Purpose |
+| Interface | URL |
 |---|---|
-| `GET /` | Root health response |
-| `GET /api/v1/health` | Application health |
-| `GET /api/v1/ready` | Readiness check |
-| `GET /api/v1/ping` | Basic connectivity check |
-| `GET /api/v1/version` | Application version information |
-| `GET /metrics` | Prometheus metrics |
-| `GET /swagger/index.html` | Swagger UI |
-
-Business APIs are exposed under:
-
-```text
-/api/v1
-```
-
-Main modules:
-
-```text
-/auth
-/users
-/categories
-/products
-/inventory
-/orders
-/payments
-```
-
-For the complete request and response contract, use Swagger.
-
----
-
-# Swagger API Documentation
-
-Swagger UI:
-
-```text
-http://localhost:8080/swagger/index.html
-```
-
-Regenerate Swagger files after API annotation changes:
-
-```bash
-swag init -g ./cmd/server/main.go --parseInternal --parseDependency
-```
-
-For protected endpoints:
-
-1. Login using the authentication API.
-2. Copy the JWT token.
-3. Click **Authorize** in Swagger.
-4. Enter:
-
-```text
-Bearer <your-jwt-token>
-```
-
----
-
-# Payment Testing
-
-The repository includes a simple local demo frontend:
-
-```text
-payment-demo/
-```
-
-Basic flow:
-
-1. Start PostgreSQL and observability infrastructure.
-2. Start the backend.
-3. Register or use an existing user.
-4. Login and obtain a JWT.
-5. Create category/product/inventory data as required.
-6. Create an order.
-7. Create the payment flow.
-8. Open the local payment demo.
-9. Complete Razorpay checkout in Test Mode.
-10. Verify the payment and webhook processing.
-
-The demo frontend is intended for local development and learning only.
-
----
-
-# Razorpay Webhook Testing
-
-Razorpay cannot deliver webhooks directly to `localhost`.
-
-Expose the local application:
-
-```bash
-ngrok http 8080
-```
-
-Use the generated public URL in the Razorpay dashboard with the payment webhook endpoint:
-
-```text
-https://<your-ngrok-domain>/api/v1/payments/webhook
-```
-
-The application verifies the `X-Razorpay-Signature` header before processing webhook data and deduplicates on `X-Razorpay-Event-Id` (requests without an event ID are rejected with 400).
-
----
-
-# Observability
-
-The current observability pipeline is:
-
-```text
-Go Application
-    |
-    +--> Prometheus Metrics --> Prometheus --> Grafana
-    |
-    +--> OpenTelemetry Traces --> OTEL Collector --> Jaeger
-    |
-    +--> Structured Logs --> stdout
-```
-
-## Prometheus
-
-Prometheus:
-
-```text
-http://localhost:9090
-```
-
-The application exposes:
-
-```text
-http://localhost:8080/metrics
-```
-
-Prometheus is configured to scrape the API through:
-
-```text
-host.docker.internal:8080
-```
-
-This assumes the API is running on the host machine while Prometheus runs in Docker.
-
-## Grafana
-
-Grafana:
-
-```text
-http://localhost:3000
-```
-
-Current local credentials configured in `docker-compose.yml`:
-
-```text
-username: admin
-password: admin
-```
-
-Change these credentials before any non-local deployment.
-
-## Jaeger
-
-Jaeger UI:
-
-```text
-http://localhost:16686
-```
-
-Grafana also has a provisioned Jaeger datasource, and the load-testing
-dashboard lists recent slow traces.
-
-See [documentation/OBSERVABILITY.md](documentation/OBSERVABILITY.md) for the metric catalogue.
-
----
-
-# Testing
-
-The project contains:
-
-- Unit tests
-- Repository integration tests
-- Order service integration tests
-- HTTP end-to-end tests
-- Locust load-test scripts
-
-Run standard tests:
-
-```bash
-go test ./...
-```
-
-Database-backed tests need the `postgres-test` container (port 5433) and
-`ENABLE_DB_TESTS=1`; without it they are skipped. They share one test
-database, so run packages sequentially (`-p 1`):
-
-```bash
-ENABLE_DB_TESTS=1 go test -p 1 -tags=integration ./internal/repository ./internal/modules/order
-ENABLE_DB_TESTS=1 go test -tags=e2e ./internal/test/e2e/...
-```
-
-PowerShell: `$env:ENABLE_DB_TESTS = "1"` first.
-
-The integration suite includes concurrency regressions: 50 concurrent
-orders against 10 units of stock, concurrent cancels of one order,
-opposite-order multi-item orders (deadlock), and concurrent stock removals.
-
-See [documentation/TESTING.md](documentation/TESTING.md).
-
----
-
-# CI Pipeline
-
-GitHub Actions runs on pushes to branches and pull requests.
-
-Current CI checks:
-
-```text
-Checkout
-    |
-    v
-Set up Go
-    |
-    v
-Verify formatting
-    |
-    v
-Build
-    |
-    v
-Unit tests
-    |
-    v
-Repository integration tests
-    |
-    v
-Order integration tests
-    |
-    v
-HTTP end-to-end tests
-```
-
-A PostgreSQL service container is provided to CI for database-dependent tests.
-
----
-
-# Makefile Commands
-
-```bash
-make run
-make build
-make test
-make fmt
-make tidy
-make docker-up
-make docker-down
-make logs
-make clean
-```
-
----
-
-# Load Testing
-
-See [LOAD_TESTING.md](LOAD_TESTING.md) for every scenario, the dashboard
-guide, measured results and troubleshooting. Quick start (PowerShell, API
-running):
+| API | http://localhost:8080/api/v1 |
+| Swagger UI | http://localhost:8080/swagger/index.html |
+| API metrics | http://localhost:8080/metrics |
+| Grafana dashboard | http://localhost:3000/d/order-processing-load-testing (admin / admin, local only) |
+| Prometheus | http://localhost:9090 (targets: /targets) |
+| Jaeger | http://localhost:16686 (service `enterprise-order-processing`) |
+| Kafka Connect REST | http://localhost:8083/connectors |
+| Locust UI / exporter | http://localhost:8089 / http://localhost:9646/metrics (while Locust runs) |
+
+## API
+
+All business routes are under `/api/v1` and, except login, user sign-up,
+category/product reads, health and the payment webhook, require
+`Authorization: Bearer <token>` from `POST /api/v1/auth/login`.
+
+| Group | Routes |
+|---|---|
+| Health | `GET /health`, `/ready` (checks DB), `/ping`, `/version` |
+| Auth | `POST /auth/login`, `GET /auth/me` |
+| Users | `POST /users` (sign-up), `GET/PUT/DELETE /users/:id`, `GET /users` |
+| Catalog | `/categories`, `/products` (`GET /products/category/:categoryId`) |
+| Inventory | `/inventory`, `/inventory/:productId` + `add-stock`, `remove-stock`, `reserve`, `release`, `confirm` |
+| Orders | `POST /orders`, `GET /orders?page=&limit=` (limit <= 100), `GET /orders/me`, `GET /orders/:id`, `PATCH /orders/:id/status`, `PATCH /orders/:id/cancel` |
+| Payments | `POST /payments`, `GET /payments`, `/payments/summary`, `/payments/:id`, `/payments/order/:orderId`, `POST /payments/:id/refund`, `POST /payments/webhook` |
+
+Regenerate Swagger after changing annotations:
+`swag init -g ./cmd/server/main.go --parseInternal --parseDependency`.
+
+### Payments and webhooks
+
+`payment-demo/` is a local checkout page for Razorpay test mode: create an
+order, `POST /payments`, open the page and pay. Razorpay cannot reach
+`localhost`, so expose the API (`ngrok http 8080`) and configure the webhook
+URL `https://<ngrok-domain>/api/v1/payments/webhook`. Webhooks must carry
+`X-Razorpay-Signature` (verified) and `X-Razorpay-Event-Id` (dedupe key;
+missing -> 400).
+
+## Observability
+
+| Signal | Path |
+|---|---|
+| Metrics | API `/metrics` and Locust `:9646/metrics`, scraped every 5 s -> Prometheus -> Grafana |
+| Traces | otelgin HTTP spans + otelgorm SQL spans (no bind values) -> OTLP -> Collector -> Jaeger; also a Jaeger datasource in Grafana |
+| Logs | Zap JSON on stdout with `trace_id`/`span_id` |
+
+`/metrics` itself is excluded from metrics, traces and access logs. Grafana's
+provisioned dashboard **Performance / Order Processing - Load Testing** covers
+Locust vs server traffic, latency percentiles (overall and per route), errors,
+Go runtime, DB pool, CDC and a slow-trace table; LOAD_TESTING.md explains
+which panels to watch for each test.
+
+| Metric | Labels | Meaning |
+|---|---|---|
+| `order_processing_http_requests_total` | method, route, status | Requests handled (route = Gin template) |
+| `order_processing_http_request_duration_seconds` | method, route, status | Handler latency histogram |
+| `order_processing_http_requests_in_flight` | method, route | Requests being handled |
+| `go_sql_{open,in_use,idle,max_open}_connections` | db_name | DB pool state at scrape time |
+| `go_sql_wait_count_total`, `go_sql_wait_duration_seconds_total` | db_name | Waits for a pool connection |
+| `go_sql_max_{idle,idle_time,lifetime}_closed_total` | db_name | Connections closed by pool limits |
+| `order_processing_cdc_events_total` | table, operation | Debezium events consumed (c/u/d/r) |
+| `order_processing_cdc_errors_total` | stage | Consumer read/decode/process errors |
+| `order_processing_cdc_end_to_end_lag_seconds` | | PostgreSQL commit to consumption |
+| `order_processing_cdc_consumer_lag_messages` | | Messages behind the latest fetched partition head |
+| `locust_users`, `locust_requests_total`, `locust_request_duration_seconds` | name, method, result | Load generator (while running) |
+| `go_*`, `process_*` | | Runtime/process; filter by `job="order-processing-api"` (Prometheus exports the same names) |
+
+Not exported: Debezium/Kafka Connect JMX metrics and PostgreSQL server
+metrics. Check the connector with
+`curl.exe http://localhost:8083/connectors/order-processing-postgres-connector/status`
+and consumer lag with
+`docker exec order-kafka /kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:9092 --describe --group order-processing-cdc-consumer`.
+
+## Testing
+
+| Suite | Command | Needs |
+|---|---|---|
+| Unit | `go test ./...` | nothing |
+| Repository + order service integration | `go test -p 1 -tags=integration ./internal/repository ./internal/modules/order` | `ENABLE_DB_TESTS=1`, `postgres-test` container (5433) |
+| HTTP end-to-end | `go test -tags=e2e ./internal/test/e2e/...` | same |
+
+DB-backed tests are skipped unless `ENABLE_DB_TESTS=1` (PowerShell:
+`$env:ENABLE_DB_TESTS = "1"`). They truncate the shared test database, so
+run packages sequentially (`-p 1`). The integration suite includes
+concurrency regressions: 50 concurrent orders against 10 units, concurrent
+cancels of one order, opposite-order multi-item orders (deadlock) and
+concurrent stock removals.
+
+CI (`.github/workflows/ci.yml`) runs gofmt, build, unit, integration and e2e
+tests against a PostgreSQL service container.
+
+Load tests: see [LOAD_TESTING.md](LOAD_TESTING.md). Quick start:
 
 ```powershell
 cd locust
@@ -775,41 +248,29 @@ python -m venv .venv-locust; .\.venv-locust\Scripts\pip install -r requirements.
 .\.venv-locust\Scripts\locust -f scenarios/smoke.py --host http://localhost:8080 -u 2 -r 2 -t 1m --headless
 ```
 
-`seed.py` creates the load-test user, products and stock and writes
-`locust/loadtest.env` (gitignored), which every scenario reads.
-
----
-
-# Known limitations
+## Known limitations
 
 - **No authorization model.** Any authenticated user can list all orders,
   read or cancel another user's order, set order status (including `PAID`
   without a payment), adjust inventory, and update or delete users. Roles and
-  ownership checks are needed before this is exposed beyond local use.
+  ownership checks are needed before use beyond local development.
 - A failed payment (`payment.failed`) cancels the order, so a later
   successful retry on the same Razorpay order cannot mark it paid.
 - `BaseModel.BeforeCreate` always assigns a new UUID, so creating a record
   with a populated association re-IDs that association.
+- The CDC consumer has no business logic yet.
 
----
+## Roadmap
 
-# Documentation
+1. Authorization: roles and resource ownership checks.
+2. CDC consumers with business logic (notifications, analytics, audit),
+   consumer idempotency, retry and dead-letter handling.
+3. Alerting and SLOs; PostgreSQL and Debezium JMX exporters.
+4. TimescaleDB for operational time-series, retention and archival.
 
-- [Architecture](documentation/ARCHITECTURE.md)
-- [Load Testing](LOAD_TESTING.md)
-- [Observability](documentation/OBSERVABILITY.md)
-- [Testing](documentation/TESTING.md)
-- [Roadmap](documentation/ROADMAP.md)
-- [Swagger API](docs/swagger.yaml)
+## Author
 
----
+**Khushi Desai**, Associate Software Engineer | Cloud & Backend Development
 
-# Author
-
-**Khushi Desai**
-
-Associate Software Engineer | Cloud & Backend Development
-
-GitHub: https://github.com/khushidesai23
-
+GitHub: https://github.com/khushidesai23 ·
 LinkedIn: https://www.linkedin.com/in/khushi-desai-ab5154225/
