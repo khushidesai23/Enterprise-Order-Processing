@@ -39,7 +39,7 @@ func Register(
 	)
 
 	router.GET(
-		"/metrics",
+		middleware.MetricsPath,
 		gin.WrapH(promhttp.Handler()),
 	)
 

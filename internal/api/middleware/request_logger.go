@@ -17,6 +17,11 @@ func RequestLogger(log *zap.Logger) gin.HandlerFunc {
 	}
 
 	return func(c *gin.Context) {
+		if c.Request.URL.Path == MetricsPath {
+			c.Next()
+			return
+		}
+
 		start := time.Now()
 
 		path := c.Request.URL.Path

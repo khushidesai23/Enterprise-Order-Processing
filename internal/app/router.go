@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
@@ -125,7 +126,12 @@ func NewRouter(options RouterOptions) (*gin.Engine, error) {
 
 	router := gin.New()
 	router.Use(gin.Recovery())
-	router.Use(otelgin.Middleware(options.Config.OTelServiceName))
+	router.Use(otelgin.Middleware(
+		options.Config.OTelServiceName,
+		otelgin.WithFilter(func(r *http.Request) bool {
+			return r.URL.Path != middleware.MetricsPath
+		}),
+	))
 	router.Use(middleware.Prometheus())
 	router.Use(middleware.RequestLogger(options.Logger))
 	router.Use(middleware.CORS())
