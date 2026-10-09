@@ -14,7 +14,7 @@ local measurements, not capacity claims for any other environment.
 | Grafana dashboard (provisioned), Prometheus scrape, Locust exporter, Jaeger datasource | Implemented; every dashboard query checked against live data |
 | HTTP, Go runtime, DB pool (`go_sql_*`) and CDC metrics | Implemented and verified |
 | CDC: PostgreSQL -> Debezium -> Kafka -> API consumer | Running and measured; the consumer records and logs events but has no business logic |
-| Debezium/Kafka Connect JMX metrics, PostgreSQL server metrics | Not implemented (inspect by command, see [CDC](#cdc-setup)) |
+| Debezium/Kafka Connect JMX metrics, PostgreSQL server metrics | Not implemented (inspect by command, see the README Observability section) |
 | Distributed Locust (master/workers) | Not tested; the exporter only runs on the master/local runner |
 
 ## Test environment
@@ -43,62 +43,22 @@ where they matter:
    started on wake was discarded; both were re-run after restarting Docker
    Desktop, whose IPv6 port forwarding had broken on resume.
 
-## 1. Start the stack
+## 1. Before a run
 
-PowerShell, from the repository root:
-
-```powershell
-Copy-Item .env.example .env        # first time only; then edit secrets/ports
-docker compose up -d
-docker compose ps                  # postgres, kafka, debezium healthy
-go build -o bin\server.exe .\cmd\server
-.\bin\server.exe                   # or: go run ./cmd/server
-```
-
-Check:
+Start the stack and (once) set up CDC as described in the
+[README](README.md#getting-started); local URLs are listed there too. Then
+check:
 
 ```powershell
-curl.exe http://localhost:8080/api/v1/ready          # {"success":true,...}
-start http://localhost:9090/targets                  # order-processing-api UP
+curl.exe http://localhost:8080/api/v1/ready                                         # {"success":true,...}
+start http://localhost:9090/targets                                                 # order-processing-api UP
+curl.exe http://localhost:8083/connectors/order-processing-postgres-connector/status # RUNNING / RUNNING
+Get-NetTCPConnection -LocalPort 5432 -State Listen                                  # must not be a native PostgreSQL if DB_PORT=5432
 ```
 
-> **Port 5432 conflict.** If a native PostgreSQL (e.g. the
-> `postgresql-x64-18` Windows service) listens on 5432, `localhost:5432`
-> reaches it instead of the container: the API then writes to a database that
-> Debezium never reads, and results describe a different server. Check with
-> `Get-NetTCPConnection -LocalPort 5432 -State Listen`; if the owner is not
-> Docker, set `DB_PORT=5434` in `.env` and run `docker compose up -d postgres`.
-> Results recorded before this branch ran against the native server.
-
-### Local URLs
-
-| Interface | URL |
-|---|---|
-| API | http://localhost:8080/api/v1 |
-| Swagger UI | http://localhost:8080/swagger/index.html |
-| API metrics | http://localhost:8080/metrics |
-| Grafana dashboard | http://localhost:3000/d/order-processing-load-testing (admin/admin, local only) |
-| Prometheus | http://localhost:9090 (targets: /targets) |
-| Jaeger | http://localhost:16686 (service `enterprise-order-processing`) |
-| Kafka Connect REST | http://localhost:8083/connectors |
-| Locust web UI | http://localhost:8089 (when not `--headless`) |
-| Locust exporter | http://localhost:9646/metrics (while Locust runs) |
-
-### CDC setup
-
-Needed once per PostgreSQL volume, after the API has started once (its
-AutoMigrate creates the tables):
-
-```powershell
-Get-Content config\debezium\setup.sql | docker exec -i order-postgres psql -U postgres -d order_processing
-curl.exe -X POST -H "Content-Type: application/json" --data "@config/debezium/postgres-connector.json" http://localhost:8083/connectors
-curl.exe http://localhost:8083/connectors/order-processing-postgres-connector/status   # RUNNING / RUNNING
-```
-
-`setup.sql` is idempotent (role, grants, publication). The connector config
-uses local development credentials (`cdc_user` / `cdc_password`).
-`KAFKA_CDC_TOPIC` lists the topics the API consumes; topics appear when a
-table first changes, and the consumer picks them up without a restart.
+If a native PostgreSQL owns 5432, the API writes to a database Debezium never
+reads and the results describe a different server (see `DB_PORT` in the
+README). Results recorded before this branch ran against such a native server.
 
 ## 2. Prepare Locust and test data
 
@@ -148,7 +108,7 @@ Add `--csv results/<name>` to keep CSVs (`results/` is gitignored). Drop
 | Spike | `locust -f scenarios/mixed_workload.py,scenarios/spike_test.py --host http://localhost:8080 --headless` | 20 users 2 min -> 300 users 3 min -> 20 users 3 min |
 | Stress | `locust -f scenarios/mixed_workload.py,scenarios/stress_test.py --host http://localhost:8080 --headless` | 25/50/100/200/300/400 users, 3 min per step |
 | Recovery | `locust -f scenarios/mixed_workload.py,scenarios/recovery_test.py --host http://localhost:8080 --headless` | 20 users 2 min -> 400 users 5 min -> 20 users 5 min |
-| Sustained | `locust -f scenarios/sustained_load.py --host http://localhost:8080 -u 100 -r 10 -t 15m --headless` | mixed reads/writes at constant load |
+| Sustained | `locust -f scenarios/baseline.py --host http://localhost:8080 -u 100 -r 10 -t 15m --headless` | baseline mix at constant load (watch for drift: RSS, goroutines, P95) |
 
 Shapes accept `LOCUST_SHAPE_SCALE` (e.g. `0.5`) to scale user counts on a
 smaller machine. Every authenticated user logs in once at start, so ramps also
