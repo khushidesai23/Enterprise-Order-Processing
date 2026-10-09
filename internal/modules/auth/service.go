@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -10,6 +11,13 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/config"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
+)
+
+// dummyPasswordHash is compared against when the email is unknown so that
+// unknown and known emails take the same bcrypt time.
+var dummyPasswordHash, _ = bcrypt.GenerateFromPassword(
+	[]byte("dummy-password-for-timing"),
+	bcrypt.DefaultCost,
 )
 
 type Service struct {
@@ -44,6 +52,21 @@ func (s *Service) Login(
 		req.Email,
 	)
 	if err != nil {
+		// Infrastructure failure (pool exhausted, timeout, ...), not a
+		// credentials problem: report it as such instead of a 401.
+		logger.ErrorContext(
+			ctx,
+			s.log,
+			"user lookup failed during login",
+			zap.Error(err),
+		)
+
+		return nil, fmt.Errorf("looking up user: %w", err)
+	}
+
+	if user == nil {
+		_ = bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(req.Password))
+
 		logger.WarnContext(
 			ctx,
 			s.log,

@@ -24,6 +24,10 @@ type Config struct {
 	DBName     string
 	DBSSLMode  string
 
+	DBMaxOpenConns    int
+	DBMaxIdleConns    int
+	DBConnMaxIdleTime time.Duration
+
 	RazorpayKeyID         string
 	RazorpayKeySecret     string
 	RazorpayWebhookSecret string
@@ -66,6 +70,12 @@ func Load() (*Config, error) {
 		DBPassword: viper.GetString("DB_PASSWORD"),
 		DBName:     viper.GetString("DB_NAME"),
 		DBSSLMode:  viper.GetString("DB_SSLMODE"),
+
+		DBMaxOpenConns: viper.GetInt("DB_MAX_OPEN_CONNS"),
+		DBMaxIdleConns: viper.GetInt("DB_MAX_IDLE_CONNS"),
+		DBConnMaxIdleTime: mustParseDuration(
+			viper.GetString("DB_CONN_MAX_IDLE_TIME"),
+		),
 
 		RazorpayKeyID:         viper.GetString("RAZORPAY_KEY_ID"),
 		RazorpayKeySecret:     viper.GetString("RAZORPAY_KEY_SECRET"),
@@ -115,6 +125,14 @@ func setDefaults() {
 	viper.SetDefault("DB_PASSWORD", "postgres")
 	viper.SetDefault("DB_NAME", "order_processing")
 	viper.SetDefault("DB_SSLMODE", "disable")
+	// Keep DB_MAX_OPEN_CONNS below PostgreSQL max_connections (100 by
+	// default) minus Debezium and admin connections, otherwise bursts fail
+	// with "sorry, too many clients already". Idle == open avoids closing
+	// and reopening connections during bursts; the idle timeout shrinks the
+	// pool afterwards.
+	viper.SetDefault("DB_MAX_OPEN_CONNS", 80)
+	viper.SetDefault("DB_MAX_IDLE_CONNS", 80)
+	viper.SetDefault("DB_CONN_MAX_IDLE_TIME", "5m")
 
 	viper.SetDefault("RAZORPAY_KEY_ID", "")
 	viper.SetDefault("RAZORPAY_KEY_SECRET", "")
@@ -183,6 +201,15 @@ func (c *Config) Validate() error {
 	}
 	if strings.TrimSpace(c.DBSSLMode) == "" {
 		return errors.New("DB_SSLMODE is required")
+	}
+	if c.DBMaxOpenConns <= 0 {
+		return errors.New("DB_MAX_OPEN_CONNS must be greater than 0")
+	}
+	if c.DBMaxIdleConns < 0 || c.DBMaxIdleConns > c.DBMaxOpenConns {
+		return errors.New("DB_MAX_IDLE_CONNS must be between 0 and DB_MAX_OPEN_CONNS")
+	}
+	if c.DBConnMaxIdleTime <= 0 {
+		return errors.New("DB_CONN_MAX_IDLE_TIME must be a positive duration")
 	}
 	if strings.TrimSpace(c.RazorpayKeyID) == "" {
 		return errors.New("RAZORPAY_KEY_ID is required")

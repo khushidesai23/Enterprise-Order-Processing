@@ -71,11 +71,12 @@ func TestLogin(t *testing.T) {
 		repo.AssertExpectations(t)
 	})
 
-	t.Run("repository error becomes invalid credentials", func(t *testing.T) {
+	t.Run("unknown email is invalid credentials", func(t *testing.T) {
 		repo := new(mocks.UserRepositoryMock)
 		service := testAuthService(repo)
 
-		repo.On("GetByEmail", ctx, "missing@example.com").Return(nil, errors.New("db down")).Once()
+		// The repository reports "not found" as (nil, nil).
+		repo.On("GetByEmail", ctx, "missing@example.com").Return(nil, nil).Once()
 
 		response, err := service.Login(ctx, LoginRequest{
 			Email:    "missing@example.com",
@@ -85,6 +86,25 @@ func TestLogin(t *testing.T) {
 		require.Error(t, err)
 		assert.Nil(t, response)
 		assert.ErrorIs(t, err, ErrInvalidCredentials)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("repository error is not reported as invalid credentials", func(t *testing.T) {
+		repo := new(mocks.UserRepositoryMock)
+		service := testAuthService(repo)
+		dbErr := errors.New("sorry, too many clients already")
+
+		repo.On("GetByEmail", ctx, "user@example.com").Return(nil, dbErr).Once()
+
+		response, err := service.Login(ctx, LoginRequest{
+			Email:    "user@example.com",
+			Password: "password123",
+		})
+
+		require.Error(t, err)
+		assert.Nil(t, response)
+		assert.ErrorIs(t, err, dbErr)
+		assert.NotErrorIs(t, err, ErrInvalidCredentials)
 		repo.AssertExpectations(t)
 	})
 
