@@ -1,16 +1,20 @@
 //go:build integration
 
-package order
+package order_test
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
+	ordermodule "github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/order"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 	testintegration "github.com/khushidesai23/Enterprise-Order-Processing/internal/test/integration"
 )
@@ -46,7 +50,7 @@ func TestOrderServiceIntegrationFlow(t *testing.T) {
 	productRepo := repository.NewProductRepository(db.DB)
 	inventoryRepo := repository.NewInventoryRepository(db.DB)
 
-	service := NewService(
+	service := ordermodule.NewService(
 		orderRepo,
 		orderItemRepo,
 		userRepo,
@@ -56,9 +60,9 @@ func TestOrderServiceIntegrationFlow(t *testing.T) {
 	)
 
 	t.Run("creating an order reserves inventory", func(t *testing.T) {
-		orderResp, err := service.CreateOrder(ctx, CreateOrderRequest{
+		orderResp, err := service.CreateOrder(ctx, ordermodule.CreateOrderRequest{
 			UserID: user.ID,
-			Items: []CreateOrderItemRequest{
+			Items: []ordermodule.CreateOrderItemRequest{
 				{
 					ProductID: product.ID,
 					Quantity:  2,
@@ -83,9 +87,9 @@ func TestOrderServiceIntegrationFlow(t *testing.T) {
 		product = testintegration.CreateProductFixture(t, creator, category.ID, "Cancel Product", "SKU-CANCEL-1", 75)
 		testintegration.CreateInventoryFixture(t, creator, product.ID, 6, 0)
 
-		orderResp, err := service.CreateOrder(ctx, CreateOrderRequest{
+		orderResp, err := service.CreateOrder(ctx, ordermodule.CreateOrderRequest{
 			UserID: user.ID,
-			Items: []CreateOrderItemRequest{
+			Items: []ordermodule.CreateOrderItemRequest{
 				{ProductID: product.ID, Quantity: 2},
 			},
 		})
@@ -108,9 +112,9 @@ func TestOrderServiceIntegrationFlow(t *testing.T) {
 		product = testintegration.CreateProductFixture(t, creator, category.ID, "Ship Product", "SKU-SHIP-1", 110)
 		testintegration.CreateInventoryFixture(t, creator, product.ID, 10, 0)
 
-		orderResp, err := service.CreateOrder(ctx, CreateOrderRequest{
+		orderResp, err := service.CreateOrder(ctx, ordermodule.CreateOrderRequest{
 			UserID: user.ID,
-			Items: []CreateOrderItemRequest{
+			Items: []ordermodule.CreateOrderItemRequest{
 				{ProductID: product.ID, Quantity: 2},
 			},
 		})
@@ -124,12 +128,12 @@ func TestOrderServiceIntegrationFlow(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		_, err = service.UpdateOrderStatus(ctx, orderResp.ID, UpdateOrderStatusRequest{
+		_, err = service.UpdateOrderStatus(ctx, orderResp.ID, ordermodule.UpdateOrderStatusRequest{
 			Status: models.OrderPacked,
 		})
 		require.NoError(t, err)
 
-		shipped, err := service.UpdateOrderStatus(ctx, orderResp.ID, UpdateOrderStatusRequest{
+		shipped, err := service.UpdateOrderStatus(ctx, orderResp.ID, ordermodule.UpdateOrderStatusRequest{
 			Status: models.OrderShipped,
 		})
 		require.NoError(t, err)
@@ -150,9 +154,9 @@ func TestOrderServiceIntegrationFlow(t *testing.T) {
 		testintegration.CreateInventoryFixture(t, creator, firstProduct.ID, 10, 0)
 		testintegration.CreateInventoryFixture(t, creator, secondProduct.ID, 1, 0)
 
-		orderResp, err := service.CreateOrder(ctx, CreateOrderRequest{
+		orderResp, err := service.CreateOrder(ctx, ordermodule.CreateOrderRequest{
 			UserID: user.ID,
-			Items: []CreateOrderItemRequest{
+			Items: []ordermodule.CreateOrderItemRequest{
 				{ProductID: firstProduct.ID, Quantity: 2},
 				{ProductID: secondProduct.ID, Quantity: 5},
 			},
@@ -160,7 +164,7 @@ func TestOrderServiceIntegrationFlow(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Nil(t, orderResp)
-		assert.ErrorIs(t, err, ErrInsufficientStock)
+		assert.ErrorIs(t, err, ordermodule.ErrInsufficientStock)
 
 		firstInventory, err := inventoryRepo.GetByProductID(ctx, firstProduct.ID)
 		require.NoError(t, err)
@@ -175,5 +179,198 @@ func TestOrderServiceIntegrationFlow(t *testing.T) {
 		orders, err := orderRepo.GetByUserID(ctx, user.ID)
 		require.NoError(t, err)
 		assert.Empty(t, orders)
+	})
+
+	t.Run("concurrent reservations never oversell", func(t *testing.T) {
+		testintegration.CleanupDatabase(t, db)
+		loadUser := testintegration.CreateUserFixture(t, creator, "Concurrent", "User", "concurrent-user@example.com", "password123")
+		loadCategory := testintegration.CreateCategoryFixture(t, creator, "Concurrent Category")
+		loadProduct := testintegration.CreateProductFixture(t, creator, loadCategory.ID, "Concurrent Product", "SKU-CONCURRENT-1", 1)
+		testintegration.CreateInventoryFixture(t, creator, loadProduct.ID, 10, 0)
+
+		const requests = 50
+		results := make(chan error, requests)
+		var workers sync.WaitGroup
+		workers.Add(requests)
+		for range requests {
+			go func() {
+				defer workers.Done()
+				_, err := service.CreateOrder(ctx, ordermodule.CreateOrderRequest{
+					UserID: loadUser.ID,
+					Items:  []ordermodule.CreateOrderItemRequest{{ProductID: loadProduct.ID, Quantity: 1}},
+				})
+				results <- err
+			}()
+		}
+		workers.Wait()
+		close(results)
+
+		var created, rejected int
+		for err := range results {
+			switch {
+			case err == nil:
+				created++
+			case errors.Is(err, ordermodule.ErrInsufficientStock):
+				rejected++
+			default:
+				t.Errorf("unexpected order error: %v", err)
+			}
+		}
+		assert.Equal(t, 10, created)
+		assert.Equal(t, requests-10, rejected)
+
+		inventory, err := inventoryRepo.GetByProductID(ctx, loadProduct.ID)
+		require.NoError(t, err)
+		assert.Equal(t, 0, inventory.AvailableQuantity)
+		assert.Equal(t, 10, inventory.ReservedQuantity)
+		orders, err := orderRepo.GetByUserID(ctx, loadUser.ID)
+		require.NoError(t, err)
+		assert.Len(t, orders, 10)
+	})
+
+	t.Run("response is built from the created rows", func(t *testing.T) {
+		testintegration.CleanupDatabase(t, db)
+		respUser := testintegration.CreateUserFixture(t, creator, "Resp", "User", "resp-user@example.com", "password123")
+		respCategory := testintegration.CreateCategoryFixture(t, creator, "Resp Category")
+		first := testintegration.CreateProductFixture(t, creator, respCategory.ID, "Resp A", "SKU-RESP-A", 12.5)
+		second := testintegration.CreateProductFixture(t, creator, respCategory.ID, "Resp B", "SKU-RESP-B", 4)
+		testintegration.CreateInventoryFixture(t, creator, first.ID, 10, 0)
+		testintegration.CreateInventoryFixture(t, creator, second.ID, 10, 0)
+
+		created, err := service.CreateOrder(ctx, ordermodule.CreateOrderRequest{
+			UserID: respUser.ID,
+			Items: []ordermodule.CreateOrderItemRequest{
+				{ProductID: first.ID, Quantity: 2},
+				{ProductID: second.ID, Quantity: 3},
+			},
+		})
+		require.NoError(t, err)
+
+		stored, err := service.GetOrder(ctx, created.ID)
+		require.NoError(t, err)
+		assert.Equal(t, 37.0, created.TotalAmount)
+		assert.Equal(t, stored.TotalAmount, created.TotalAmount)
+		assert.Equal(t, models.OrderCreated, created.Status)
+		assert.Equal(t, stored.CreatedAt, created.CreatedAt)
+		assert.ElementsMatch(t, stored.Items, created.Items)
+		for _, item := range created.Items {
+			assert.NotEmpty(t, item.ProductName)
+			assert.NotEmpty(t, item.SKU)
+		}
+	})
+
+	t.Run("missing inventory and missing product are reported distinctly", func(t *testing.T) {
+		testintegration.CleanupDatabase(t, db)
+		errUser := testintegration.CreateUserFixture(t, creator, "Err", "User", "err-user@example.com", "password123")
+		errCategory := testintegration.CreateCategoryFixture(t, creator, "Err Category")
+		noStock := testintegration.CreateProductFixture(t, creator, errCategory.ID, "No Inventory", "SKU-NO-INV", 1)
+
+		_, err := service.CreateOrder(ctx, ordermodule.CreateOrderRequest{
+			UserID: errUser.ID,
+			Items:  []ordermodule.CreateOrderItemRequest{{ProductID: noStock.ID, Quantity: 1}},
+		})
+		assert.ErrorIs(t, err, ordermodule.ErrInventoryNotFound)
+
+		_, err = service.CreateOrder(ctx, ordermodule.CreateOrderRequest{
+			UserID: errUser.ID,
+			Items:  []ordermodule.CreateOrderItemRequest{{ProductID: uuid.New(), Quantity: 1}},
+		})
+		assert.ErrorIs(t, err, ordermodule.ErrProductNotFound)
+
+		orders, err := orderRepo.GetByUserID(ctx, errUser.ID)
+		require.NoError(t, err)
+		assert.Empty(t, orders)
+	})
+
+	t.Run("concurrent cancels release reserved stock once", func(t *testing.T) {
+		testintegration.CleanupDatabase(t, db)
+		cancelUser := testintegration.CreateUserFixture(t, creator, "Cancel", "Race", "cancel-race@example.com", "password123")
+		cancelCategory := testintegration.CreateCategoryFixture(t, creator, "Cancel Race Category")
+		cancelProduct := testintegration.CreateProductFixture(t, creator, cancelCategory.ID, "Cancel Race Product", "SKU-CANCEL-RACE-1", 10)
+		testintegration.CreateInventoryFixture(t, creator, cancelProduct.ID, 10, 0)
+
+		// Two open orders keep enough reserved stock that a double release
+		// would not be caught by the reserved >= quantity guard alone.
+		var orderIDs []uuid.UUID
+		for range 2 {
+			created, err := service.CreateOrder(ctx, ordermodule.CreateOrderRequest{
+				UserID: cancelUser.ID,
+				Items:  []ordermodule.CreateOrderItemRequest{{ProductID: cancelProduct.ID, Quantity: 3}},
+			})
+			require.NoError(t, err)
+			orderIDs = append(orderIDs, created.ID)
+		}
+
+		const cancels = 10
+		results := make(chan error, cancels)
+		var workers sync.WaitGroup
+		workers.Add(cancels)
+		for range cancels {
+			go func() {
+				defer workers.Done()
+				_, err := service.CancelOrder(ctx, orderIDs[0])
+				results <- err
+			}()
+		}
+		workers.Wait()
+		close(results)
+
+		var cancelled int
+		for err := range results {
+			switch {
+			case err == nil:
+				cancelled++
+			case errors.Is(err, ordermodule.ErrOrderAlreadyCancelled):
+			default:
+				t.Errorf("unexpected cancel error: %v", err)
+			}
+		}
+		assert.Equal(t, 1, cancelled)
+
+		inventory, err := inventoryRepo.GetByProductID(ctx, cancelProduct.ID)
+		require.NoError(t, err)
+		assert.Equal(t, 7, inventory.AvailableQuantity)
+		assert.Equal(t, 3, inventory.ReservedQuantity)
+	})
+
+	t.Run("multi-item orders locking products in opposite order do not deadlock", func(t *testing.T) {
+		testintegration.CleanupDatabase(t, db)
+		lockUser := testintegration.CreateUserFixture(t, creator, "Lock", "Order", "lock-order@example.com", "password123")
+		lockCategory := testintegration.CreateCategoryFixture(t, creator, "Lock Order Category")
+		first := testintegration.CreateProductFixture(t, creator, lockCategory.ID, "Lock A", "SKU-LOCK-A", 1)
+		second := testintegration.CreateProductFixture(t, creator, lockCategory.ID, "Lock B", "SKU-LOCK-B", 1)
+		testintegration.CreateInventoryFixture(t, creator, first.ID, 1000, 0)
+		testintegration.CreateInventoryFixture(t, creator, second.ID, 1000, 0)
+
+		const requests = 40
+		results := make(chan error, requests)
+		var workers sync.WaitGroup
+		workers.Add(requests)
+		for i := range requests {
+			items := []ordermodule.CreateOrderItemRequest{
+				{ProductID: first.ID, Quantity: 1},
+				{ProductID: second.ID, Quantity: 1},
+			}
+			if i%2 == 1 {
+				items[0], items[1] = items[1], items[0]
+			}
+			go func() {
+				defer workers.Done()
+				_, err := service.CreateOrder(ctx, ordermodule.CreateOrderRequest{UserID: lockUser.ID, Items: items})
+				results <- err
+			}()
+		}
+		workers.Wait()
+		close(results)
+
+		for err := range results {
+			assert.NoError(t, err)
+		}
+		for _, productID := range []uuid.UUID{first.ID, second.ID} {
+			inventory, err := inventoryRepo.GetByProductID(ctx, productID)
+			require.NoError(t, err)
+			assert.Equal(t, 1000-requests, inventory.AvailableQuantity)
+			assert.Equal(t, requests, inventory.ReservedQuantity)
+		}
 	})
 }

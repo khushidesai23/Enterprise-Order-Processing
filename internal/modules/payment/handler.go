@@ -234,7 +234,8 @@ func (h *Handler) ProcessWebhook(c *gin.Context) {
 			return
 
 		case errors.Is(err, ErrPaymentNotFound),
-			errors.Is(err, ErrUnknownWebhookEvent):
+			errors.Is(err, ErrUnknownWebhookEvent),
+			errors.Is(err, ErrMissingWebhookEvent):
 
 			response.Error(c, http.StatusBadRequest, err.Error())
 			return

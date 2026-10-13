@@ -40,7 +40,6 @@ type paymentRepository interface {
 type webhookRepository interface {
 	Create(ctx context.Context, tx *gorm.DB, webhook *models.PaymentWebhook) error
 	MarkProcessed(ctx context.Context, tx *gorm.DB, payloadID string, processedAt time.Time) error
-	MarkFailed(ctx context.Context, tx *gorm.DB, payloadID string, processedAt time.Time) error
 }
 
 type orderService interface {
@@ -299,6 +298,13 @@ func (s *Service) ProcessWebhook(
 		return err
 	}
 
+	// The event ID is the idempotency key. Without it every event would
+	// share payload_id "" and all but the first would be dropped as
+	// duplicates.
+	if req.EventID == "" {
+		return ErrMissingWebhookEvent
+	}
+
 	webhook, err := ParseWebhook(req.Body)
 	if err != nil {
 		return err
@@ -397,13 +403,8 @@ func (s *Service) ProcessWebhook(
 		status,
 	); err != nil {
 
-		_ = s.webhookRepository.MarkFailed(
-			ctx,
-			tx,
-			req.EventID,
-			time.Now(),
-		)
-
+		// Roll back the webhook record as well so the gateway's retry
+		// of this event is processed again rather than deduplicated.
 		tx.Rollback()
 
 		return err

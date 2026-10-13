@@ -111,6 +111,14 @@ func main() {
 		}
 	}()
 
+	sqlDB, err := db.DB.DB()
+	if err != nil {
+		log.Fatal("database pool metrics initialization failed", zap.Error(err))
+	}
+	if err := metrics.RegisterDBStats(sqlDB, cfg.DBName); err != nil {
+		log.Fatal("database pool metrics registration failed", zap.Error(err))
+	}
+
 	// Auto Migration
 	if err := db.AutoMigrate(); err != nil {
 		log.Fatal(
@@ -126,17 +134,20 @@ func main() {
 		kafka.Config{
 			Brokers:  cfg.KafkaBrokers,
 			GroupID:  cfg.KafkaCDCGroupID,
-			Topic:    cfg.KafkaCDCTopic,
+			Topics:   cfg.KafkaCDCTopics,
 			MinBytes: cfg.KafkaMinBytes,
 			MaxBytes: cfg.KafkaMaxBytes,
 			MaxWait:  cfg.KafkaMaxWait,
 		},
 		log,
 	)
+	if err := metrics.RegisterCDCConsumerLag(kafkaConsumer.Lag); err != nil {
+		log.Fatal("CDC metrics registration failed", zap.Error(err))
+	}
 	log.Info(
 		"configured Kafka CDC consumer",
 		zap.Strings("brokers", cfg.KafkaBrokers),
-		zap.String("topic", cfg.KafkaCDCTopic),
+		zap.Strings("topics", cfg.KafkaCDCTopics),
 	)
 
 	// Create a dedicated context for the Kafka consumer.

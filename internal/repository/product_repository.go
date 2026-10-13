@@ -31,6 +31,27 @@ func (r *ProductRepository) Create(
 }
 
 // GetByID returns a product by its ID.
+// GetByIDs returns the products with the given IDs without associations.
+// Missing IDs are simply absent from the result.
+func (r *ProductRepository) GetByIDs(
+	ctx context.Context,
+	ids []uuid.UUID,
+) ([]models.Product, error) {
+
+	var products []models.Product
+
+	err := r.db.WithContext(ctx).
+		Where("id IN ?", ids).
+		Find(&products).
+		Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return products, nil
+}
+
 func (r *ProductRepository) GetByID(
 	ctx context.Context,
 	id uuid.UUID,
@@ -42,58 +63,6 @@ func (r *ProductRepository) GetByID(
 		Preload("Category").
 		Preload("Inventory").
 		First(&product, "id = ?", id).
-		Error
-
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, err
-		}
-
-		return nil, err
-	}
-
-	return &product, nil
-}
-
-// GetByIDTx returns a product by its ID inside a transaction.
-func (r *ProductRepository) GetByIDTx(
-	ctx context.Context,
-	tx *gorm.DB,
-	id uuid.UUID,
-) (*models.Product, error) {
-
-	var product models.Product
-
-	err := tx.WithContext(ctx).
-		Preload("Category").
-		Preload("Inventory").
-		First(&product, "id = ?", id).
-		Error
-
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, err
-		}
-
-		return nil, err
-	}
-
-	return &product, nil
-}
-
-// GetBySKU returns a product by SKU.
-func (r *ProductRepository) GetBySKU(
-	ctx context.Context,
-	sku string,
-) (*models.Product, error) {
-
-	var product models.Product
-
-	err := r.db.WithContext(ctx).
-		Preload("Category").
-		Preload("Inventory").
-		Where("sku = ?", sku).
-		First(&product).
 		Error
 
 	if err != nil {

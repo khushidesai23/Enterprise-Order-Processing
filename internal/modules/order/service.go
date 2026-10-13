@@ -1,8 +1,10 @@
 package order
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"slices"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -27,9 +29,9 @@ type orderRepository interface {
 	Create(ctx context.Context, tx *gorm.DB, order *models.Order) error
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Order, error)
 	GetByIDTx(ctx context.Context, tx *gorm.DB, id uuid.UUID) (*models.Order, error)
-	GetAll(ctx context.Context) ([]models.Order, error)
+	GetAll(ctx context.Context, limit, offset int) ([]models.Order, error)
 	GetByUserID(ctx context.Context, userID uuid.UUID) ([]models.Order, error)
-	UpdateTotalAmount(ctx context.Context, tx *gorm.DB, id uuid.UUID, total float64) error
+	GetByUserIDPage(ctx context.Context, userID uuid.UUID, limit, offset int) ([]models.Order, error)
 	UpdateStatusTx(ctx context.Context, tx *gorm.DB, id uuid.UUID, status models.OrderStatus) error
 }
 
@@ -38,10 +40,11 @@ type orderItemRepository interface {
 }
 
 type orderProductRepository interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*models.Product, error)
+	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]models.Product, error)
 }
 
 type orderInventoryRepository interface {
+	ExistsByProductID(ctx context.Context, productID uuid.UUID) (bool, error)
 	GetByProductIDTx(ctx context.Context, tx *gorm.DB, productID uuid.UUID) (*models.Inventory, error)
 	ReserveStockTx(ctx context.Context, tx *gorm.DB, productID uuid.UUID, quantity int) error
 	ReleaseReservedStockTx(ctx context.Context, tx *gorm.DB, productID uuid.UUID, quantity int) error
@@ -70,6 +73,10 @@ func NewService(
 }
 
 // CreateOrder creates a new order and reserves inventory in one transaction.
+//
+// Reads that need no lock (user, product prices) happen before the
+// transaction, and the response is built from the rows just written, so the
+// transaction holds inventory row locks only for the writes themselves.
 func (s *Service) CreateOrder(
 	ctx context.Context,
 	req CreateOrderRequest,
@@ -83,6 +90,66 @@ func (s *Service) CreateOrder(
 		return nil, err
 	}
 
+	// Lock inventory rows in a stable order so concurrent multi-item
+	// orders cannot deadlock on each other.
+	items := slices.Clone(req.Items)
+	slices.SortFunc(items, func(a, b CreateOrderItemRequest) int {
+		return bytes.Compare(a.ProductID[:], b.ProductID[:])
+	})
+
+	user, err := s.userRepository.GetByID(
+		ctx,
+		req.UserID,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if user == nil {
+		return nil, ErrUserNotFound
+	}
+
+	productIDs := make([]uuid.UUID, len(items))
+	for i, item := range items {
+		productIDs[i] = item.ProductID
+	}
+
+	products, err := s.productRepository.GetByIDs(
+		ctx,
+		productIDs,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	productsByID := make(map[uuid.UUID]models.Product, len(products))
+	for _, product := range products {
+		productsByID[product.ID] = product
+	}
+
+	order := ToOrderModel(req)
+	orderItems := make([]models.OrderItem, 0, len(items))
+
+	for _, requestItem := range items {
+
+		product, ok := productsByID[requestItem.ProductID]
+		if !ok {
+			return nil, ErrProductNotFound
+		}
+
+		orderItem := BuildOrderItem(
+			uuid.Nil,
+			product.ID,
+			requestItem.Quantity,
+			product.Price,
+		)
+
+		orderItems = append(orderItems, *orderItem)
+
+		order.TotalAmount += product.Price *
+			float64(requestItem.Quantity)
+	}
+
 	tx := s.orderRepository.Begin(ctx)
 
 	if tx.Error != nil {
@@ -90,23 +157,6 @@ func (s *Service) CreateOrder(
 	}
 
 	defer rollbackOnPanic(tx)
-
-	user, err := s.userRepository.GetByIDTx(
-		ctx,
-		tx,
-		req.UserID,
-	)
-	if err != nil {
-		tx.Rollback()
-		return nil, err
-	}
-
-	if user == nil {
-		tx.Rollback()
-		return nil, ErrUserNotFound
-	}
-
-	order := ToOrderModel(req)
 
 	if err := s.orderRepository.Create(
 		ctx,
@@ -117,74 +167,30 @@ func (s *Service) CreateOrder(
 		return nil, err
 	}
 
-	var (
-		orderItems []models.OrderItem
-		total      float64
-	)
+	for i := range orderItems {
 
-	for _, requestItem := range req.Items {
+		orderItems[i].OrderID = order.ID
 
-		product, err := s.productRepository.GetByID(
+		// The guarded UPDATE locks the inventory row and checks stock in
+		// one statement.
+		err := s.inventoryRepository.ReserveStockTx(
 			ctx,
-			requestItem.ProductID,
+			tx,
+			orderItems[i].ProductID,
+			orderItems[i].Quantity,
 		)
 		if err != nil {
-
 			tx.Rollback()
 
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, ErrProductNotFound
+			if errors.Is(err, repository.ErrInsufficientQuantity) {
+				return nil, s.missingInventoryOrInsufficientStock(
+					ctx,
+					orderItems[i].ProductID,
+				)
 			}
 
 			return nil, err
 		}
-
-		inventory, err := s.inventoryRepository.GetByProductIDTx(
-			ctx,
-			tx,
-			requestItem.ProductID,
-		)
-		if err != nil {
-
-			tx.Rollback()
-
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, ErrInventoryNotFound
-			}
-
-			return nil, err
-		}
-
-		if inventory.AvailableQuantity < requestItem.Quantity {
-			tx.Rollback()
-			return nil, ErrInsufficientStock
-		}
-
-		if err := s.inventoryRepository.ReserveStockTx(
-			ctx,
-			tx,
-			requestItem.ProductID,
-			requestItem.Quantity,
-		); err != nil {
-
-			tx.Rollback()
-			return nil, err
-		}
-
-		orderItem := BuildOrderItem(
-			order.ID,
-			product.ID,
-			requestItem.Quantity,
-			product.Price,
-		)
-
-		orderItems = append(
-			orderItems,
-			*orderItem,
-		)
-
-		total += product.Price *
-			float64(requestItem.Quantity)
 	}
 
 	if err := s.orderItemRepository.CreateMany(
@@ -197,35 +203,49 @@ func (s *Service) CreateOrder(
 		return nil, err
 	}
 
-	if err := s.orderRepository.UpdateTotalAmount(
-		ctx,
-		tx,
-		order.ID,
-		total,
-	); err != nil {
-
-		tx.Rollback()
-		return nil, err
-	}
-
-	order.TotalAmount = total
-
 	if err := tx.Commit().Error; err != nil {
 		tx.Rollback()
 		return nil, err
 	}
 
-	order, err = s.orderRepository.GetByID(
-		ctx,
-		order.ID,
-	)
-	if err != nil {
-		return nil, err
+	// Attach products only after the insert: GORM would otherwise upsert
+	// the association and BaseModel.BeforeCreate would re-ID it.
+	for i := range orderItems {
+		orderItems[i].Product = productsByID[orderItems[i].ProductID]
 	}
+	order.Items = orderItems
+
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"order created",
+		zap.String("order_id", order.ID.String()),
+		zap.String("user_id", order.UserID.String()),
+		zap.Float64("total_amount", order.TotalAmount),
+	)
 
 	response := ToOrderResponse(order)
 
 	return &response, nil
+}
+
+// missingInventoryOrInsufficientStock distinguishes the two reasons a
+// guarded reservation can match no row. It only runs on the failure path.
+func (s *Service) missingInventoryOrInsufficientStock(
+	ctx context.Context,
+	productID uuid.UUID,
+) error {
+
+	exists, err := s.inventoryRepository.ExistsByProductID(ctx, productID)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		return ErrInventoryNotFound
+	}
+
+	return ErrInsufficientStock
 }
 
 // GetOrder returns a single order by its ID.
@@ -303,10 +323,14 @@ func (s *Service) GetOrderForPayment(
 // GetOrders returns all orders.
 func (s *Service) GetOrders(
 	ctx context.Context,
+	page int,
+	pageSize int,
 ) ([]OrderListResponse, error) {
 
 	orders, err := s.orderRepository.GetAll(
 		ctx,
+		pageSize,
+		(page-1)*pageSize,
 	)
 	if err != nil {
 		return nil, err
@@ -319,6 +343,8 @@ func (s *Service) GetOrders(
 func (s *Service) GetOrdersByUser(
 	ctx context.Context,
 	userID uuid.UUID,
+	page int,
+	pageSize int,
 ) ([]OrderListResponse, error) {
 
 	user, err := s.userRepository.GetByID(
@@ -333,9 +359,11 @@ func (s *Service) GetOrdersByUser(
 		return nil, ErrUserNotFound
 	}
 
-	orders, err := s.orderRepository.GetByUserID(
+	orders, err := s.orderRepository.GetByUserIDPage(
 		ctx,
 		userID,
+		pageSize,
+		(page-1)*pageSize,
 	)
 	if err != nil {
 		return nil, err
@@ -400,15 +428,6 @@ func (s *Service) UpdateOrderStatus(
 	}
 
 	response := ToOrderResponse(order)
-
-	logger.InfoContext(
-		ctx,
-		s.log,
-		"order created",
-		zap.String("order_id", order.ID.String()),
-		zap.String("user_id", order.UserID.String()),
-		zap.Float64("total_amount", order.TotalAmount),
-	)
 
 	return &response, nil
 }
@@ -718,7 +737,7 @@ func (s *Service) confirmReservedInventory(
 	order *models.Order,
 ) error {
 
-	for _, item := range order.Items {
+	for _, item := range itemsInLockOrder(order.Items) {
 
 		inventory, err := s.inventoryRepository.GetByProductIDTx(
 			ctx,
@@ -744,6 +763,9 @@ func (s *Service) confirmReservedInventory(
 			item.ProductID,
 			item.Quantity,
 		); err != nil {
+			if errors.Is(err, repository.ErrInsufficientQuantity) {
+				return ErrInsufficientReserved
+			}
 			return err
 		}
 
@@ -766,7 +788,7 @@ func (s *Service) releaseReservedInventory(
 	order *models.Order,
 ) error {
 
-	for _, item := range order.Items {
+	for _, item := range itemsInLockOrder(order.Items) {
 
 		inventory, err := s.inventoryRepository.GetByProductIDTx(
 			ctx,
@@ -792,6 +814,9 @@ func (s *Service) releaseReservedInventory(
 			item.ProductID,
 			item.Quantity,
 		); err != nil {
+			if errors.Is(err, repository.ErrInsufficientQuantity) {
+				return ErrInsufficientReserved
+			}
 			return err
 		}
 
@@ -806,6 +831,17 @@ func (s *Service) releaseReservedInventory(
 	}
 
 	return nil
+}
+
+// itemsInLockOrder returns order items sorted by product ID, the same order
+// CreateOrder uses, so every inventory-locking path acquires row locks
+// consistently.
+func itemsInLockOrder(items []models.OrderItem) []models.OrderItem {
+	sorted := slices.Clone(items)
+	slices.SortFunc(sorted, func(a, b models.OrderItem) int {
+		return bytes.Compare(a.ProductID[:], b.ProductID[:])
+	})
+	return sorted
 }
 
 func (s *Service) ensureUniqueProducts(

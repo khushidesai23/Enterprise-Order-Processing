@@ -31,9 +31,3 @@ type InventoryListResponse struct {
 	AvailableQuantity int       `json:"available_quantity"`
 	ReservedQuantity  int       `json:"reserved_quantity"`
 }
-
-type InventorySummary struct {
-	TotalProducts     int64 `json:"total_products"`
-	AvailableProducts int64 `json:"available_products"`
-	OutOfStock        int64 `json:"out_of_stock"`
-}

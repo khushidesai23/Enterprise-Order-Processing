@@ -65,23 +65,3 @@ func ToInventoryList(
 
 	return response
 }
-
-func ToInventorySummary(
-	inventories []models.Inventory,
-) InventorySummary {
-
-	var summary InventorySummary
-
-	summary.TotalProducts = int64(len(inventories))
-
-	for _, inventory := range inventories {
-
-		if inventory.AvailableQuantity > 0 {
-			summary.AvailableProducts++
-		} else {
-			summary.OutOfStock++
-		}
-	}
-
-	return summary
-}

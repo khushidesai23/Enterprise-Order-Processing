@@ -44,9 +44,14 @@ func New(cfg *config.Config) (*Database, error) {
 		return nil, err
 	}
 
-	sqlDB.SetMaxIdleConns(10)
-	sqlDB.SetMaxOpenConns(100)
-	sqlDB.SetConnMaxIdleTime(30 * time.Minute)
+	maxOpen, maxIdle, maxIdleTime := cfg.DBMaxOpenConns, cfg.DBMaxIdleConns, cfg.DBConnMaxIdleTime
+	if maxOpen <= 0 {
+		maxOpen, maxIdle, maxIdleTime = 80, 80, 5*time.Minute
+	}
+
+	sqlDB.SetMaxOpenConns(maxOpen)
+	sqlDB.SetMaxIdleConns(maxIdle)
+	sqlDB.SetConnMaxIdleTime(maxIdleTime)
 	sqlDB.SetConnMaxLifetime(2 * time.Hour)
 
 	if err := sqlDB.Ping(); err != nil {
