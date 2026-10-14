@@ -30,12 +30,12 @@ Documentation:
 
 ```text
 Client -> Gin router -> middleware -> handler -> service -> repository -> PostgreSQL
-            |                                                             |
-            |  middleware: recovery, OTel, Prometheus, 10s request         | WAL (logical)
-            |  deadline, access log, CORS, JWT (per route)                 v
-            |                                                   Debezium -> Kafka
-            +-- /metrics -> Prometheus -> Grafana                          |
-            +-- OTLP -> OTel Collector -> Jaeger          API CDC consumer <-+
+            |                                                                 |
+            |  middleware: recovery, OTel, Prometheus, 10s request            | WAL (logical)
+            |  deadline, access log, CORS, JWT (per route)                    v
+            |                                                      Debezium -> Kafka
+            +-- /metrics -> Prometheus -> Grafana                             |
+            +-- OTLP -> OTel Collector -> Jaeger           API CDC consumer <-+
 ```
 
 | Layer | Responsibility |
