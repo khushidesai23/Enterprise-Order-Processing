@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/response"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/authz"
 )
 
 type Handler struct {
@@ -43,9 +44,15 @@ func (h *Handler) CreatePayment(c *gin.Context) {
 		return
 	}
 
+	principal, ok := authz.RequirePrincipal(c)
+	if !ok {
+		return
+	}
+
 	paymentResp, err := h.service.CreatePayment(
 		c.Request.Context(),
 		req,
+		principal,
 	)
 	if err != nil {
 
@@ -90,7 +97,12 @@ func (h *Handler) GetPayment(c *gin.Context) {
 		return
 	}
 
-	paymentResp, err := h.service.GetPayment(c.Request.Context(), id)
+	principal, ok := authz.RequirePrincipal(c)
+	if !ok {
+		return
+	}
+
+	paymentResp, err := h.service.GetPayment(c.Request.Context(), id, principal)
 	if err != nil {
 
 		switch {
@@ -107,12 +119,13 @@ func (h *Handler) GetPayment(c *gin.Context) {
 
 // GET /payments
 // @Summary Get Payments
-// @Description Get all payments
+// @Description Get all payments (admin only)
 // @Tags Payments
 // @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Success 200 {object} response.APIResponse
+// @Failure 403 {object} response.APIResponse
 // @Failure 500 {object} response.APIResponse
 // @Router /payments [get]
 func (h *Handler) GetPayments(c *gin.Context) {
@@ -146,7 +159,12 @@ func (h *Handler) GetPaymentByOrder(c *gin.Context) {
 		return
 	}
 
-	paymentResp, err := h.service.GetPaymentByOrder(c.Request.Context(), orderID)
+	principal, ok := authz.RequirePrincipal(c)
+	if !ok {
+		return
+	}
+
+	paymentResp, err := h.service.GetPaymentByOrder(c.Request.Context(), orderID, principal)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrOrderNotFound),
@@ -165,12 +183,13 @@ func (h *Handler) GetPaymentByOrder(c *gin.Context) {
 
 // GET /payments/summary
 // @Summary Get Payment Summary
-// @Description Get a summary of payments
+// @Description Get a summary of payments (admin only)
 // @Tags Payments
 // @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Success 200 {object} response.APIResponse
+// @Failure 403 {object} response.APIResponse
 // @Failure 500 {object} response.APIResponse
 // @Router /payments/summary [get]
 func (h *Handler) GetPaymentSummary(c *gin.Context) {
@@ -255,7 +274,7 @@ func (h *Handler) ProcessWebhook(c *gin.Context) {
 
 // POST /payments/:id/refund
 // @Summary Refund Payment
-// @Description Refund a payment by ID
+// @Description Refund a payment by ID (admin only)
 // @Tags Payments
 // @Security BearerAuth
 // @Accept json
@@ -263,6 +282,7 @@ func (h *Handler) ProcessWebhook(c *gin.Context) {
 // @Param id path string true "Payment ID"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
+// @Failure 403 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
 // @Failure 500 {object} response.APIResponse
 // @Router /payments/{id}/refund [post]
