@@ -24,7 +24,7 @@ Documentation:
 | Prometheus metrics, provisioned Grafana dashboard, OTel tracing to Jaeger | Implemented and verified under load |
 | CDC: PostgreSQL -> Debezium -> Kafka -> API consumer | Running and measured; the consumer only counts and logs events |
 | Locust suite with seeded data and load shapes | Implemented; results in LOAD_TESTING.md |
-| Authorization (roles, ownership) | **Not implemented**, see [Known limitations](#known-limitations) |
+| Authorization: `customer`/`admin` roles and resource ownership checks | Implemented; covered by unit and e2e tests, see [Authorization](#authorization) |
 
 ## Architecture
 
@@ -41,7 +41,8 @@ Client -> Gin router -> middleware -> handler -> service -> repository -> Postgr
 | Layer | Responsibility |
 |---|---|
 | `internal/app`, `internal/api/routes` | Dependency wiring, middleware, route registration (each module has `RegisterRoutes`) |
-| `internal/api/middleware` | JWT auth, CORS, Prometheus, request deadline, access log |
+| `internal/api/middleware` | JWT auth, role checks (`RequireRole`), CORS, Prometheus, request deadline, access log |
+| `internal/authz` | The authenticated caller (`Principal`) and ownership checks used by handlers and services |
 | `internal/modules/<module>` | Handler (HTTP), service (business rules), DTOs, mappers, errors |
 | `internal/repository` | All database access (GORM) |
 | `internal/messaging/kafka` | Debezium CDC consumer |
@@ -168,7 +169,7 @@ category/product reads, health and the payment webhook, require
 |---|---|
 | Health | `GET /health`, `/ready` (checks DB), `/ping`, `/version` |
 | Auth | `POST /auth/login`, `GET /auth/me` |
-| Users | `POST /users` (sign-up), `GET/PUT/DELETE /users/:id`, `GET /users` |
+| Users | `POST /users` (sign-up), `GET/PUT/DELETE /users/:id`, `GET /users`, `PATCH /users/:id/role` |
 | Catalog | `/categories`, `/products` (`GET /products/category/:categoryId`) |
 | Inventory | `/inventory`, `/inventory/:productId` + `add-stock`, `remove-stock`, `reserve`, `release`, `confirm` |
 | Orders | `POST /orders`, `GET /orders?page=&limit=` (limit <= 100), `GET /orders/me`, `GET /orders/:id`, `PATCH /orders/:id/status`, `PATCH /orders/:id/cancel` |
@@ -176,6 +177,34 @@ category/product reads, health and the payment webhook, require
 
 Regenerate Swagger after changing annotations:
 `swag init -g ./cmd/server/main.go --parseInternal --parseDependency`.
+
+### Authorization
+
+Every user has a role, `customer` or `admin`, which is carried in the JWT.
+Sign-up always creates a `customer`; no request field can set the role.
+
+| Operation | Customer | Admin |
+|---|---|---|
+| Create orders; list (`GET /orders`, `/orders/me`), read and cancel orders | Own orders only | All orders |
+| Change order status (`PATCH /orders/:id/status`) | No | Yes |
+| Create a payment, read a payment (`/payments/:id`, `/payments/order/:orderId`) | For own orders only | All |
+| List payments, payment summary, refunds | No | Yes |
+| Read and update a user profile (`GET/PUT /users/:id`) | Own profile only; cannot change `is_active` | All users |
+| List or delete users, change roles (`PATCH /users/:id/role`) | No | Yes (not their own role) |
+| Create, update or delete categories and products | No | Yes |
+| Read inventory | Yes | Yes |
+| Any inventory write (create, update, stock add/remove/reserve/release/confirm) | No | Yes |
+
+A missing role check returns `403`. Asking for an order, payment or user
+that belongs to someone else returns `404`, the same as for one that does
+not exist, so IDs cannot be probed. Tokens issued before roles existed are
+treated as `customer`.
+
+The first admin is created by promoting a registered user:
+`make promote-admin EMAIL=you@example.com` (or
+`UPDATE users SET role = 'admin' WHERE email = '...'`). Further admins can
+be promoted with `PATCH /api/v1/users/:id/role`. A role change takes effect
+at the user's next login.
 
 ### Payments and webhooks
 
@@ -244,16 +273,17 @@ Load tests: see [LOAD_TESTING.md](LOAD_TESTING.md). Quick start:
 ```powershell
 cd locust
 python -m venv .venv-locust; .\.venv-locust\Scripts\pip install -r requirements.txt
+$env:LOCUST_ADMIN_EMAIL = "admin@example.com"; $env:LOCUST_ADMIN_PASSWORD = "..."   # an admin account
 .\.venv-locust\Scripts\python seed.py --host http://localhost:8080
 .\.venv-locust\Scripts\locust -f scenarios/smoke.py --host http://localhost:8080 -u 2 -r 2 -t 1m --headless
 ```
 
 ## Known limitations
 
-- **No authorization model.** Any authenticated user can list all orders,
-  read or cancel another user's order, set order status (including `PAID`
-  without a payment), adjust inventory, and update or delete users. Roles and
-  ownership checks are needed before use beyond local development.
+- The role and the user's existence are read from the JWT, not the
+  database, so a demoted, deactivated or deleted user keeps their access
+  until the token expires (`JWT_EXPIRATION`, 24h by default). Keep the
+  expiry short or add token revocation before relying on demotion.
 - A failed payment (`payment.failed`) cancels the order, so a later
   successful retry on the same Razorpay order cannot mark it paid.
 - `BaseModel.BeforeCreate` always assigns a new UUID, so creating a record
@@ -262,11 +292,12 @@ python -m venv .venv-locust; .\.venv-locust\Scripts\pip install -r requirements.
 
 ## Roadmap
 
-1. Authorization: roles and resource ownership checks.
-2. CDC consumers with business logic (notifications, analytics, audit),
+1. CDC consumers with business logic (notifications, analytics, audit),
    consumer idempotency, retry and dead-letter handling.
-3. Alerting and SLOs; PostgreSQL and Debezium JMX exporters.
-4. TimescaleDB for operational time-series, retention and archival.
+2. Alerting and SLOs; PostgreSQL and Debezium JMX exporters.
+3. TimescaleDB for operational time-series, retention and archival.
+4. Token revocation (or short-lived tokens with refresh) so role changes and
+   deactivation take effect immediately.
 
 ## Author
 

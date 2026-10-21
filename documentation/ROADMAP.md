@@ -12,6 +12,7 @@ This roadmap reflects the current implementation state.
 - GORM models and migrations
 - Repository layer
 - Authentication and JWT
+- Role-based access control (customer/admin) and resource ownership checks
 - User management
 - Category management
 - Product management
