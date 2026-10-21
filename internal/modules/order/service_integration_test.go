@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/authz"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
 	ordermodule "github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/order"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
@@ -95,7 +96,7 @@ func TestOrderServiceIntegrationFlow(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		cancelled, err := service.CancelOrder(ctx, orderResp.ID)
+		cancelled, err := service.CancelOrder(ctx, orderResp.ID, authz.Principal{UserID: user.ID, Role: models.RoleCustomer})
 		require.NoError(t, err)
 		assert.Equal(t, models.OrderCancelled, cancelled.Status)
 
@@ -246,7 +247,7 @@ func TestOrderServiceIntegrationFlow(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		stored, err := service.GetOrder(ctx, created.ID)
+		stored, err := service.GetOrder(ctx, created.ID, authz.Principal{UserID: respUser.ID, Role: models.RoleCustomer})
 		require.NoError(t, err)
 		assert.Equal(t, 37.0, created.TotalAmount)
 		assert.Equal(t, stored.TotalAmount, created.TotalAmount)
@@ -308,7 +309,7 @@ func TestOrderServiceIntegrationFlow(t *testing.T) {
 		for range cancels {
 			go func() {
 				defer workers.Done()
-				_, err := service.CancelOrder(ctx, orderIDs[0])
+				_, err := service.CancelOrder(ctx, orderIDs[0], authz.Principal{UserID: cancelUser.ID, Role: models.RoleCustomer})
 				results <- err
 			}()
 		}
