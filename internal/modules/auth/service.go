@@ -105,6 +105,7 @@ func (s *Service) Login(
 	token, err := s.jwt.GenerateToken(
 		user.ID.String(),
 		user.Email,
+		string(user.Role),
 	)
 	if err != nil {
 		return nil, err
@@ -134,6 +135,8 @@ func (s *Service) Login(
 			Email: user.Email,
 
 			IsActive: user.IsActive,
+
+			Role: string(user.Role),
 		},
 	}, nil
 }
@@ -156,6 +159,11 @@ func (s *Service) GetCurrentUser(
 		return nil, err
 	}
 
+	// The token outlived its user (deleted after it was issued).
+	if user == nil {
+		return nil, ErrInvalidToken
+	}
+
 	return &UserInfo{
 		ID: user.ID.String(),
 
@@ -166,5 +174,7 @@ func (s *Service) GetCurrentUser(
 		Email: user.Email,
 
 		IsActive: user.IsActive,
+
+		Role: string(user.Role),
 	}, nil
 }
