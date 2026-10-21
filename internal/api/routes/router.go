@@ -6,6 +6,7 @@ import (
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/handlers"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/middleware"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/auth"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/category"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/inventory"
@@ -44,6 +45,7 @@ func Register(
 	)
 
 	authMiddleware := middleware.AuthMiddleware(jwtManager)
+	adminOnly := middleware.RequireRole(models.RoleAdmin)
 
 	api := router.Group("/api/v1")
 
@@ -65,36 +67,42 @@ func Register(
 			api,
 			userHandler,
 			authMiddleware,
+			adminOnly,
 		)
 
 		category.RegisterRoutes(
 			api,
 			categoryHandler,
 			authMiddleware,
+			adminOnly,
 		)
 
 		product.RegisterRoutes(
 			api,
 			productHandler,
 			authMiddleware,
+			adminOnly,
 		)
 
 		inventory.RegisterRoutes(
 			api,
 			inventoryHandler,
 			authMiddleware,
+			adminOnly,
 		)
 
 		order.RegisterRoutes(
 			api,
 			orderHandler,
 			authMiddleware,
+			adminOnly,
 		)
 
 		payment.RegisterRoutes(
 			api,
 			paymentHandler,
 			authMiddleware,
+			adminOnly,
 		)
 	}
 }
