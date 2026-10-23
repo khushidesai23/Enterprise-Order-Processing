@@ -6,7 +6,6 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
 )
@@ -162,8 +161,9 @@ func (r *PaymentRepository) GetByOrderIDTx(
 	return &payment, nil
 }
 
-// GetByGatewayOrderIDTx loads and locks (FOR UPDATE) the payment so
-// concurrent webhooks for the same payment apply status changes serially.
+// GetByGatewayOrderIDTx finds the payment for a gateway order. It does not
+// lock: payment changes are serialized by locking the payment's order first
+// (see payment.Service), so every path takes locks in the same order.
 func (r *PaymentRepository) GetByGatewayOrderIDTx(
 	ctx context.Context,
 	tx *gorm.DB,
@@ -174,7 +174,6 @@ func (r *PaymentRepository) GetByGatewayOrderIDTx(
 
 	err := tx.
 		WithContext(ctx).
-		Clauses(clause.Locking{Strength: "UPDATE"}).
 		Where(
 			"gateway_order_id = ?",
 			gatewayOrderID,
