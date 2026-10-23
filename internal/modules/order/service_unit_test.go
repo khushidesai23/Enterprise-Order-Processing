@@ -229,3 +229,25 @@ func TestTransitionOrderUpdatesStatus(t *testing.T) {
 	require.NoError(t, err)
 	orderRepo.AssertExpectations(t)
 }
+
+func TestUpdateOrderStatusRejectsPaymentOwnedStatuses(t *testing.T) {
+	repo := new(orderRepositoryMock)
+	service := testOrderService(repo, new(mocks.UserRepositoryMock), new(orderProductRepositoryMock), new(orderInventoryRepositoryMock))
+
+	for _, status := range []models.OrderStatus{models.OrderPaymentPending, models.OrderPaid} {
+		_, err := service.UpdateOrderStatus(context.Background(), uuid.New(), UpdateOrderStatusRequest{Status: status})
+
+		assert.ErrorIs(t, err, ErrStatusSetByPayment, status)
+	}
+	repo.AssertNotCalled(t, "Begin", mock.Anything)
+}
+
+func TestCancelUnpaidOrderRefusesPaidOrders(t *testing.T) {
+	service := testOrderService(new(orderRepositoryMock), new(mocks.UserRepositoryMock), new(orderProductRepositoryMock), new(orderInventoryRepositoryMock))
+
+	for _, status := range []models.OrderStatus{models.OrderPaid, models.OrderPacked} {
+		err := service.cancelUnpaidOrderTx(context.Background(), &gorm.DB{}, &models.Order{Status: status})
+
+		assert.ErrorIs(t, err, ErrOrderRefundRequired, status)
+	}
+}

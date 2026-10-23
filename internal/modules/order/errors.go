@@ -30,6 +30,8 @@ var (
 	ErrOrderAlreadyCompleted  = errors.New("order is already delivered")
 	ErrOrderCannotBeModified  = errors.New("order cannot be modified")
 	ErrOrderCannotBeCancelled = errors.New("order cannot be cancelled in the current status")
+	ErrOrderRefundRequired    = errors.New("order is paid: refund the payment to cancel it")
+	ErrStatusSetByPayment     = errors.New("PAYMENT_PENDING and PAID are set by the payment flow, not directly")
 
 	// Payment Errors
 	ErrPaymentPending = errors.New("payment is pending")
