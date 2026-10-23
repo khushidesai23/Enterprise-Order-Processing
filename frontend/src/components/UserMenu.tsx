@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
-import { LayoutDashboard, LogOut, Package, Store, UserRound } from "lucide-react";
+import { Heart, LayoutDashboard, LogOut, Package, Store, UserRound } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { fullName, initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 const itemClass =
   "flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-foreground outline-none data-[highlighted]:bg-muted [&_svg]:size-4 [&_svg]:text-subtle";
 
-export function UserMenu({ variant = "light" }: { variant?: "light" | "dark" }) {
+export function UserMenu({ variant = "light", greeting = false }: { variant?: "light" | "dark"; greeting?: boolean }) {
   const { user, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
   if (!user) return null;
@@ -17,6 +17,15 @@ export function UserMenu({ variant = "light" }: { variant?: "light" | "dark" }) 
   return (
     <Dropdown.Root>
       <Dropdown.Trigger asChild>
+        {greeting ? (
+          <button
+            className="flex flex-col items-start rounded-sm px-2 py-1 text-left leading-tight text-white hover:outline hover:outline-1 hover:outline-white"
+            aria-label="Account menu"
+          >
+            <span className="max-w-36 truncate text-xs text-slate-300">Hello, {user.first_name}</span>
+            <span className="text-sm font-semibold">Account & Lists</span>
+          </button>
+        ) : (
         <button
           className={cn(
             "flex items-center gap-2 rounded-full py-1 pl-1 pr-2.5 text-sm font-medium transition-colors",
@@ -29,6 +38,7 @@ export function UserMenu({ variant = "light" }: { variant?: "light" | "dark" }) 
           </span>
           <span className="hidden max-w-32 truncate sm:inline">{user.first_name}</span>
         </button>
+        )}
       </Dropdown.Trigger>
       <Dropdown.Portal>
         <Dropdown.Content
@@ -49,6 +59,11 @@ export function UserMenu({ variant = "light" }: { variant?: "light" | "dark" }) 
           <Dropdown.Item asChild className={itemClass}>
             <Link to="/shop/orders">
               <Package /> My orders
+            </Link>
+          </Dropdown.Item>
+          <Dropdown.Item asChild className={itemClass}>
+            <Link to="/shop/wishlist">
+              <Heart /> My wishlist
             </Link>
           </Dropdown.Item>
           <Dropdown.Item asChild className={itemClass}>

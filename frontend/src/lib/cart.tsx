@@ -6,6 +6,7 @@ export interface CartLine {
   sku: string;
   price: number;
   category: string;
+  imageUrl?: string;
   quantity: number;
 }
 

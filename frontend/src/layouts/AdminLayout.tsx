@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Loader2,
   Menu,
+  MessageSquareText,
   Package,
   ShoppingCart,
   Tags,
@@ -24,6 +25,7 @@ const NAV = [
   { to: "/admin/products", label: "Products", icon: Package },
   { to: "/admin/categories", label: "Categories", icon: Tags },
   { to: "/admin/inventory", label: "Inventory", icon: Boxes },
+  { to: "/admin/reviews", label: "Reviews", icon: MessageSquareText },
   { to: "/admin/customers", label: "Customers", icon: Users },
 ];
 

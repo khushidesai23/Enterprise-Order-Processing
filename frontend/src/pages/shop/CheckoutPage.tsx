@@ -12,7 +12,7 @@ import { usePayOrder } from "@/lib/usePayOrder";
 import type { Order } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/primitives";
-import { ProductArt } from "@/components/common";
+import { ProductImage } from "@/components/shop";
 import { useCartAvailability } from "./CartPage";
 
 const STEPS = ["Cart", "Review", "Payment", "Confirmation"];
@@ -86,7 +86,7 @@ export function CheckoutPage() {
             <ul className="divide-y divide-border">
               {lines.map((line) => (
                 <li key={line.productId} className="flex items-center gap-4 px-5 py-3">
-                  <ProductArt id={line.productId} name={line.name} size="sm" className="size-12 rounded-md" />
+                  <ProductImage id={line.productId} name={line.name} src={byId.get(line.productId)?.image_url ?? line.imageUrl} size="sm" className="size-12 rounded-md" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{line.name}</p>
                     <p className="text-xs text-subtle">Qty {line.quantity}</p>

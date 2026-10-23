@@ -17,6 +17,11 @@ import type {
   Product,
   ProductInput,
   ProductListItem,
+  ProductReviews,
+  ProductSearchResult,
+  AdminReview,
+  Review,
+  SearchParams,
   Role,
   StockOperation,
   User,
@@ -52,8 +57,21 @@ export const categoriesApi = {
   remove: (id: string) => request<null>("DELETE", `/categories/${id}`),
 };
 
+// Builds a query string, repeating array values (brand=a&brand=b).
+export function toQuery(params: object): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "" || value === false) continue;
+    if (Array.isArray(value)) value.forEach((item) => search.append(key, String(item)));
+    else search.set(key, String(value));
+  }
+  const query = search.toString();
+  return query ? `?${query}` : "";
+}
+
 export const productsApi = {
   list: () => request<ProductListItem[]>("GET", "/products"),
+  search: (params: SearchParams) => request<ProductSearchResult>("GET", `/products/search${toQuery(params)}`),
   get: (id: string) => request<Product>("GET", `/products/${id}`),
   byCategory: (categoryId: string) =>
     request<ProductListItem[]>("GET", `/products/category/${categoryId}`),
@@ -108,4 +126,15 @@ export const paymentsApi = {
 
 export const healthApi = {
   health: () => request<{ status: string; database: { status: string } }>("GET", "/health"),
+};
+
+export const reviewsApi = {
+  forProduct: (productId: string, params: { page?: number; limit?: number; rating?: number; sort?: string }) =>
+    request<ProductReviews>("GET", `/products/${productId}/reviews${toQuery(params)}`),
+  mine: (productId: string) => request<Review>("GET", `/products/${productId}/reviews/me`),
+  save: (productId: string, input: { rating: number; title: string; body: string }) =>
+    request<Review>("PUT", `/products/${productId}/reviews`, input),
+  remove: (id: string) => request<null>("DELETE", `/reviews/${id}`),
+  list: (params: { page?: number; limit?: number; rating?: number }) =>
+    request<{ items: AdminReview[]; total: number; page: number; limit: number }>("GET", `/reviews${toQuery(params)}`),
 };

@@ -104,10 +104,18 @@ export const backend = {
       expect(created.status, created.error).toBe(201);
       category = created.data;
     }
-    const product = await api<{ id: string; name: string; sku: string }>(
+    const product = await api<{ id: string; name: string; sku: string; category: { id: string } }>(
       "POST",
       "/products",
-      { name: `E2E Fixture ${suffix}`, sku: `E2E-${suffix}`, price, description: "Fixture product", category_id: category.id },
+      {
+        name: `E2E Fixture ${suffix}`,
+        sku: `E2E-${suffix}`,
+        price,
+        mrp: Math.round(price * 1.25),
+        brand: "E2E Brand",
+        description: "Fixture product. Made for tests.",
+        category_id: category.id,
+      },
       adminToken,
     );
     expect(product.status, product.error).toBe(201);
@@ -135,6 +143,16 @@ export const backend = {
     const order = await api<{ id: string }>("POST", "/orders", { items: [{ product_id: productId, quantity }] }, customerToken);
     expect(order.status, order.error).toBe(201);
     return order.data;
+  },
+  async review(token: string, productId: string, rating: number, title: string) {
+    const result = await api<{ id: string }>("PUT", `/products/${productId}/reviews`, { rating, title, body: "Written by an e2e test." }, token);
+    expect(result.status, result.error).toBe(200);
+    return result.data;
+  },
+  async product(productId: string) {
+    const result = await api<{ rating_average: number; rating_count: number }>("GET", `/products/${productId}`);
+    expect(result.status, result.error).toBe(200);
+    return result.data;
   },
   async inventory(token: string, productId: string) {
     const result = await api<{ available_quantity: number; reserved_quantity: number }>("GET", `/inventory/${productId}`, undefined, token);

@@ -26,6 +26,18 @@
   --color-info: #0086c9;
   --color-info-soft: #f0f9ff;
 
+  /* Storefront chrome and calls to action */
+  --color-nav: #111a2e;
+  --color-nav-2: #1f2b45;
+  --color-nav-hover: #2c3a58;
+  --color-cart: #fcd34d;
+  --color-cart-hover: #fbbf24;
+  --color-buy: #fb923c;
+  --color-buy-hover: #f97316;
+  --color-deal: #c81e3a;
+  --color-star: #f59e0b;
+  --color-link: #2162a1;
+
   --color-sidebar: #0f172a;
   --color-sidebar-foreground: #cbd5e1;
   --color-sidebar-active: #1e293b;
@@ -75,4 +87,12 @@ body {
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* Horizontal product rails scroll without a visible bar. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

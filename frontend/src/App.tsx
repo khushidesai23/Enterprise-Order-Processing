@@ -5,7 +5,9 @@ import { RequireAdmin, RequireAuth } from "./components/common";
 import { StoreLayout } from "./layouts/StoreLayout";
 import { LoginPage } from "./pages/auth/LoginPage";
 import { RegisterPage } from "./pages/auth/RegisterPage";
-import { CatalogPage } from "./pages/shop/CatalogPage";
+import { HomePage } from "./pages/shop/HomePage";
+import { SearchPage } from "./pages/shop/SearchPage";
+import { WishlistPage } from "./pages/shop/WishlistPage";
 import { ProductPage } from "./pages/shop/ProductPage";
 import { CartPage } from "./pages/shop/CartPage";
 import { CheckoutPage } from "./pages/shop/CheckoutPage";
@@ -23,6 +25,7 @@ const InventoryAdminPage = lazy(() => import("./pages/admin/InventoryAdminPage")
 const OrdersAdminPage = lazy(() => import("./pages/admin/OrdersAdminPage").then((m) => ({ default: m.OrdersAdminPage })));
 const OrderAdminDetailPage = lazy(() => import("./pages/admin/OrderAdminDetailPage").then((m) => ({ default: m.OrderAdminDetailPage })));
 const PaymentsAdminPage = lazy(() => import("./pages/admin/PaymentsAdminPage").then((m) => ({ default: m.PaymentsAdminPage })));
+const ReviewsAdminPage = lazy(() => import("./pages/admin/ReviewsAdminPage").then((m) => ({ default: m.ReviewsAdminPage })));
 const CustomersAdminPage = lazy(() => import("./pages/admin/CustomersAdminPage").then((m) => ({ default: m.CustomersAdminPage })));
 
 function Loading() {
@@ -41,7 +44,9 @@ export function App() {
       <Route element={<StoreLayout />}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
-        <Route path="/shop" element={<CatalogPage />} />
+        <Route path="/shop" element={<HomePage />} />
+        <Route path="/shop/search" element={<SearchPage />} />
+        <Route path="/shop/wishlist" element={<WishlistPage />} />
         <Route path="/shop/products/:id" element={<ProductPage />} />
         <Route path="/shop/cart" element={<CartPage />} />
         <Route
@@ -96,6 +101,7 @@ export function App() {
         <Route path="orders" element={<OrdersAdminPage />} />
         <Route path="orders/:id" element={<OrderAdminDetailPage />} />
         <Route path="payments" element={<PaymentsAdminPage />} />
+        <Route path="reviews" element={<ReviewsAdminPage />} />
         <Route path="customers" element={<CustomersAdminPage />} />
         <Route path="*" element={<NotFoundPage admin />} />
       </Route>

@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState, ErrorState, Skeleton } from "@/components/ui/primitives";
 import { OrderStatusBadge, PaymentStatusBadge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ui/dialog";
-import { ProductArt } from "@/components/common";
+import { ProductImage } from "@/components/shop";
 import { OrderTimeline } from "@/components/OrderTimeline";
 
 export function OrderDetailPage() {
@@ -136,7 +136,7 @@ export function OrderDetailPage() {
           <ul className="divide-y divide-border">
             {data.items.map((item) => (
               <li key={item.product_id} className="flex items-center gap-4 px-5 py-3">
-                <ProductArt id={item.product_id} name={item.product_name} size="sm" className="size-12 rounded-md" />
+                <ProductImage id={item.product_id} name={item.product_name} src={item.image_url} size="sm" className="size-12 rounded-md" />
                 <div className="min-w-0 flex-1">
                   <Link to={`/shop/products/${item.product_id}`} className="block truncate text-sm font-medium hover:text-primary">
                     {item.product_name}

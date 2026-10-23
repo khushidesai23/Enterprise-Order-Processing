@@ -1,4 +1,4 @@
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig, loadEnv, type ProxyOptions } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
@@ -8,7 +8,15 @@ import path from "node:path";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const apiTarget = env.API_PROXY_TARGET || "http://localhost:8080";
-  const proxy = { "/api": { target: apiTarget, changeOrigin: true } };
+  const proxy: Record<string, ProxyOptions> = {
+    "/api": {
+      target: apiTarget,
+      changeOrigin: true,
+      // The browser only talks to this server, so the API needs no CORS
+      // check; dropping Origin keeps any dev/preview port working.
+      configure: (server) => server.on("proxyReq", (request) => request.removeHeader("origin")),
+    },
+  };
 
   return {
     plugins: [react(), tailwindcss()],

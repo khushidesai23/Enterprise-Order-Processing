@@ -1,6 +1,6 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ExternalLink, Package, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { categoriesApi, inventoryApi, productsApi } from "@/lib/endpoints";
@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Card, EmptyState, ErrorState, Field, Input, Select, Skeleton, Table, Td, Textarea, Th } from "@/components/ui/primitives";
 import { StockBadge } from "@/components/ui/badge";
 import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
-import { PageHeader, ProductArt } from "@/components/common";
+import { PageHeader, Pagination } from "@/components/common";
+import { ProductImage } from "@/components/shop";
 import { LOW_STOCK_THRESHOLD } from "./InventoryAdminPage";
 
 interface FormState {
@@ -19,11 +20,35 @@ interface FormState {
   description: string;
   sku: string;
   price: string;
+  mrp: string;
+  brand: string;
+  image_url: string;
+  images: string;
   category_id: string;
   initial_stock: string;
 }
 
-const EMPTY: FormState = { name: "", description: "", sku: "", price: "", category_id: "", initial_stock: "0" };
+const EMPTY: FormState = {
+  name: "",
+  description: "",
+  sku: "",
+  price: "",
+  mrp: "",
+  brand: "",
+  image_url: "",
+  images: "",
+  category_id: "",
+  initial_stock: "0",
+};
+
+const PAGE_SIZE = 25;
+
+function imageLines(value: string): string[] {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
 
 // Matches CreateProductRequest / UpdateProductRequest binding tags.
 function validate(form: FormState, creating: boolean): Partial<Record<keyof FormState, string>> {
@@ -36,6 +61,16 @@ function validate(form: FormState, creating: boolean): Partial<Record<keyof Form
   const price = Number(form.price);
   if (!form.price || Number.isNaN(price) || price <= 0) errors.price = "Enter a price greater than zero.";
   if (!form.category_id) errors.category_id = "Choose a category.";
+  if (form.mrp) {
+    const mrp = Number(form.mrp);
+    if (Number.isNaN(mrp) || mrp < 0) errors.mrp = "Enter zero or a positive amount.";
+    else if (mrp > 0 && mrp < price) errors.mrp = "MRP cannot be below the price.";
+  }
+  if (form.brand.length > 100) errors.brand = "At most 100 characters.";
+  if (form.image_url.length > 500) errors.image_url = "At most 500 characters.";
+  const gallery = imageLines(form.images);
+  if (gallery.length > 10) errors.images = "At most 10 images.";
+  else if (gallery.some((url) => url.length > 500)) errors.images = "Each URL can be at most 500 characters.";
   if (creating) {
     const stock = Number(form.initial_stock);
     if (!Number.isInteger(stock) || stock < 0) errors.initial_stock = "Whole number, zero or more.";
@@ -45,21 +80,31 @@ function validate(form: FormState, creating: boolean): Partial<Record<keyof Form
 
 export function ProductsAdminPage() {
   const queryClient = useQueryClient();
-  const products = useQuery({ queryKey: ["products", { categoryId: "" }], queryFn: productsApi.list });
   const categories = useQuery({ queryKey: ["categories"], queryFn: categoriesApi.list });
   const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [page, setPage] = useState(1);
+
+  // Search after typing pauses.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setQuery(search.trim());
+      setPage(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  const products = useQuery({
+    queryKey: ["search", "admin-products", query, categoryFilter, page],
+    queryFn: () =>
+      productsApi.search({ q: query || undefined, category_id: categoryFilter || undefined, sort: "newest", page, limit: PAGE_SIZE }),
+    placeholderData: keepPreviousData,
+  });
   const [editing, setEditing] = useState<ProductListItem | "new" | null>(null);
   const [deleting, setDeleting] = useState<ProductListItem | null>(null);
 
-  const visible = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    return (products.data ?? []).filter(
-      (product) =>
-        (!categoryFilter || product.category_id === categoryFilter) &&
-        (!needle || product.name.toLowerCase().includes(needle) || product.sku.toLowerCase().includes(needle)),
-    );
-  }, [products.data, search, categoryFilter]);
+  const visible = products.data?.items ?? [];
 
   const remove = useMutation({
     mutationFn: (id: string) => productsApi.remove(id),
@@ -94,7 +139,15 @@ export function ProductsAdminPage() {
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint" />
             <Input className="pl-9" placeholder="Search by name or SKU" value={search} onChange={(event) => setSearch(event.target.value)} aria-label="Search products" />
           </div>
-          <Select className="sm:w-56" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} aria-label="Filter by category">
+          <Select
+            className="sm:w-56"
+            value={categoryFilter}
+            onChange={(event) => {
+              setCategoryFilter(event.target.value);
+              setPage(1);
+            }}
+            aria-label="Filter by category"
+          >
             <option value="">All categories</option>
             {categories.data?.map((category) => (
               <option key={category.id} value={category.id}>
@@ -113,7 +166,7 @@ export function ProductsAdminPage() {
             <Skeleton className="h-64" />
           </div>
         ) : visible.length === 0 ? (
-          <EmptyState icon={<Package />} title={products.data?.length ? "No products match" : "No products yet"} />
+          <EmptyState icon={<Package />} title={query || categoryFilter ? "No products match" : "No products yet"} />
         ) : (
           <Table>
             <thead>
@@ -132,15 +185,21 @@ export function ProductsAdminPage() {
                 <tr key={product.id} className="hover:bg-muted/40" data-testid="admin-product-row">
                   <Td>
                     <div className="flex items-center gap-3">
-                      <ProductArt id={product.id} name={product.name} size="sm" className="size-10 shrink-0 rounded-md" />
+                      <ProductImage id={product.id} name={product.name} src={product.image_url} size="sm" className="size-10 shrink-0 rounded-md border border-border" />
                       <div className="min-w-0">
-                        <p className="max-w-64 truncate font-medium">{product.name}</p>
-                        <p className="text-xs text-subtle">{product.sku}</p>
+                        <p className="max-w-72 truncate font-medium">{product.name}</p>
+                        <p className="text-xs text-subtle">
+                          {product.sku}
+                          {product.brand ? ` · ${product.brand}` : ""}
+                        </p>
                       </div>
                     </div>
                   </Td>
                   <Td className="text-subtle">{product.category}</Td>
-                  <Td className="tabular text-right font-medium">{money(product.price)}</Td>
+                  <Td className="tabular text-right font-medium">
+                    {money(product.price)}
+                    {product.mrp > product.price && <p className="text-xs font-normal text-subtle line-through">{money(product.mrp)}</p>}
+                  </Td>
                   <Td className="tabular text-right">{number(product.available_quantity)}</Td>
                   <Td className="tabular text-right text-subtle">{number(product.reserved_quantity)}</Td>
                   <Td>
@@ -165,6 +224,12 @@ export function ProductsAdminPage() {
               ))}
             </tbody>
           </Table>
+        )}
+        {products.data && products.data.total > 0 && (
+          <div className="flex items-center justify-between border-t border-border">
+            <span className="pl-4 text-sm text-subtle">{number(products.data.total)} products</span>
+            <Pagination page={page} hasNext={page * PAGE_SIZE < products.data.total} onChange={setPage} loading={products.isFetching} />
+          </div>
         )}
       </Card>
 
@@ -205,14 +270,24 @@ function ProductDialog({
   const details = useQuery({ queryKey: ["product", product?.id], queryFn: () => productsApi.get(product!.id), enabled: !creating });
   const [form, setForm] = useState<FormState>(() =>
     product
-      ? { name: product.name, description: "", sku: product.sku, price: String(product.price), category_id: product.category_id, initial_stock: "0" }
+      ? {
+          ...EMPTY,
+          name: product.name,
+          sku: product.sku,
+          price: String(product.price),
+          mrp: product.mrp ? String(product.mrp) : "",
+          brand: product.brand,
+          image_url: product.image_url,
+          category_id: product.category_id,
+        }
       : { ...EMPTY, category_id: categories[0]?.id ?? "" },
   );
   const [descriptionLoaded, setDescriptionLoaded] = useState(creating);
   const [touched, setTouched] = useState(false);
 
+  // The list item has no description or gallery; load them when editing.
   if (!descriptionLoaded && details.data) {
-    setForm((current) => ({ ...current, description: details.data.description }));
+    setForm((current) => ({ ...current, description: details.data.description, images: details.data.images.join("\n") }));
     setDescriptionLoaded(true);
   }
 
@@ -226,6 +301,10 @@ function ProductDialog({
         sku: form.sku.trim(),
         price: Math.round(Number(form.price) * 100) / 100,
         category_id: form.category_id,
+        brand: form.brand.trim(),
+        mrp: form.mrp ? Math.round(Number(form.mrp) * 100) / 100 : 0,
+        image_url: form.image_url.trim() || imageLines(form.images)[0] || "",
+        images: imageLines(form.images),
       };
       if (!creating) return productsApi.update(product.id, input);
       const created = await productsApi.create(input);
@@ -278,10 +357,24 @@ function ProductDialog({
           <Field label="SKU" htmlFor="p-sku" error={errors.sku}>
             <Input id="p-sku" value={form.sku} onChange={set("sku")} aria-invalid={!!errors.sku} />
           </Field>
+          <Field label="Brand" htmlFor="p-brand" error={errors.brand}>
+            <Input id="p-brand" value={form.brand} onChange={set("brand")} aria-invalid={!!errors.brand} />
+          </Field>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Price (₹)" htmlFor="p-price" error={errors.price}>
             <Input id="p-price" type="number" min="0.01" step="0.01" value={form.price} onChange={set("price")} aria-invalid={!!errors.price} />
           </Field>
+          <Field label="MRP (₹)" htmlFor="p-mrp" error={errors.mrp} hint="List price, shown struck through. Optional.">
+            <Input id="p-mrp" type="number" min="0" step="0.01" value={form.mrp} onChange={set("mrp")} aria-invalid={!!errors.mrp} />
+          </Field>
         </div>
+        <Field label="Main image URL" htmlFor="p-image" error={errors.image_url} hint="Defaults to the first gallery image.">
+          <Input id="p-image" value={form.image_url} onChange={set("image_url")} placeholder="https://" />
+        </Field>
+        <Field label="Gallery image URLs" htmlFor="p-images" error={errors.images} hint="One URL per line, up to 10.">
+          <Textarea id="p-images" value={form.images} onChange={set("images")} disabled={!descriptionLoaded} className="min-h-20 font-mono text-xs" />
+        </Field>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Category" htmlFor="p-category" error={errors.category_id}>
             <Select id="p-category" value={form.category_id} onChange={set("category_id")}>

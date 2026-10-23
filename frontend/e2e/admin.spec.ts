@@ -276,4 +276,26 @@ test.describe("admin console", () => {
     await expect(page.getByTestId("admin-user-row")).toContainText("(you)");
     await expect(page.getByTestId("admin-user-row").getByRole("button")).toHaveCount(0);
   });
+
+  test("review moderation recalculates the product rating", async ({ page }) => {
+    const adminToken = await backend.login(ADMIN.email, ADMIN.password);
+    const product = await backend.createProduct(adminToken, 5);
+    const happy = await backend.registerCustomer();
+    const grumpy = await backend.registerCustomer();
+    await backend.review(happy.token, product.id, 5, "Lovely fixture");
+    await backend.review(grumpy.token, product.id, 1, `Spam ${product.sku}`);
+    expect(await backend.product(product.id)).toMatchObject({ rating_average: 3, rating_count: 2 });
+
+    await signInAsAdmin(page);
+    await page.getByRole("link", { name: "Reviews", exact: true }).click();
+    await page.getByRole("tab", { name: "1 star" }).click();
+    const row = page.getByTestId("admin-review-row").filter({ hasText: `Spam ${product.sku}` });
+    await expect(row).toContainText(product.name);
+    await row.getByRole("button", { name: /Delete review by/ }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Delete review" }).click();
+    await expect(page.getByText("Review deleted", { exact: true })).toBeVisible();
+    await expect(row).toHaveCount(0);
+
+    expect(await backend.product(product.id)).toMatchObject({ rating_average: 5, rating_count: 1 });
+  });
 });

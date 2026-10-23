@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import { toast } from "sonner";
@@ -12,7 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState, ErrorState, Field, Input, Skeleton, Table, Td, Th } from "@/components/ui/primitives";
 import { StockBadge } from "@/components/ui/badge";
 import { Dialog } from "@/components/ui/dialog";
-import { PageHeader, StatCard } from "@/components/common";
+import { PageHeader, Pagination, StatCard } from "@/components/common";
+
+const PAGE_SIZE = 50;
 
 export const LOW_STOCK_THRESHOLD = 10;
 
@@ -37,6 +39,11 @@ export function InventoryAdminPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [action, setAction] = useState<Action | null>(null);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, filter]);
 
   const items = inventory.data ?? [];
   const untracked = useMemo(() => {
@@ -132,6 +139,7 @@ export function InventoryAdminPage() {
         ) : visible.length === 0 ? (
           <EmptyState icon={<Boxes />} title="Nothing to show" description="No inventory records match this filter." />
         ) : (
+          <>
           <Table>
             <thead>
               <tr>
@@ -143,7 +151,7 @@ export function InventoryAdminPage() {
               </tr>
             </thead>
             <tbody>
-              {visible.map((item) => (
+              {visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((item) => (
                 <tr key={item.product_id} className="hover:bg-muted/40" data-testid="inventory-row">
                   <Td>
                     <p className="font-medium">{item.product_name}</p>
@@ -169,6 +177,13 @@ export function InventoryAdminPage() {
               ))}
             </tbody>
           </Table>
+          {visible.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between border-t border-border">
+              <span className="pl-4 text-sm text-subtle">{number(visible.length)} products</span>
+              <Pagination page={page} hasNext={page * PAGE_SIZE < visible.length} onChange={setPage} />
+            </div>
+          )}
+          </>
         )}
       </Card>
 

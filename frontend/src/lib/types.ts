@@ -46,10 +46,20 @@ export interface ProductListItem {
   name: string;
   sku: string;
   price: number;
+  brand: string;
+  mrp: number;
+  image_url: string;
+  rating_average: number;
+  rating_count: number;
   category_id: string;
   category: string;
   available_quantity: number;
   reserved_quantity: number;
+}
+
+export interface ProductSpec {
+  name: string;
+  value: string;
 }
 
 export interface Product {
@@ -58,6 +68,13 @@ export interface Product {
   description: string;
   sku: string;
   price: number;
+  brand: string;
+  mrp: number;
+  image_url: string;
+  images: string[];
+  specs: ProductSpec[];
+  rating_average: number;
+  rating_count: number;
   category: { id: string; name: string };
   inventory: { available_quantity: number; reserved_quantity: number };
 }
@@ -68,6 +85,74 @@ export interface ProductInput {
   sku: string;
   price: number;
   category_id: string;
+  brand?: string;
+  mrp?: number;
+  image_url?: string;
+  images?: string[];
+}
+
+export type SearchSort =
+  | "relevance"
+  | "featured"
+  | "price_asc"
+  | "price_desc"
+  | "rating"
+  | "reviews"
+  | "newest"
+  | "discount"
+  | "bestselling";
+
+export interface SearchParams {
+  q?: string;
+  category_id?: string;
+  brand?: string[];
+  min_price?: number;
+  max_price?: number;
+  min_rating?: number;
+  in_stock?: boolean;
+  deals?: boolean;
+  sort?: SearchSort;
+  page?: number;
+  limit?: number;
+}
+
+export interface ProductSearchResult {
+  items: ProductListItem[];
+  total: number;
+  page: number;
+  limit: number;
+  facets: {
+    categories: { id: string; name: string; count: number }[];
+    brands: { name: string; count: number }[];
+    price_min: number;
+    price_max: number;
+  };
+}
+
+export interface Review {
+  id: string;
+  product_id: string;
+  user_id: string;
+  reviewer_name: string;
+  rating: number;
+  title: string;
+  body: string;
+  verified_purchase: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductReviews {
+  items: Review[];
+  total: number;
+  page: number;
+  limit: number;
+  summary: { average: number; count: number; histogram: Record<string, number> };
+}
+
+export interface AdminReview extends Review {
+  product_name: string;
+  reviewer_email: string;
 }
 
 export interface Inventory {
@@ -96,6 +181,7 @@ export interface OrderItem {
   product_id: string;
   product_name: string;
   sku: string;
+  image_url: string;
   quantity: number;
   price: number;
   sub_total: number;

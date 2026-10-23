@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import { toast } from "sonner";
@@ -12,7 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, EmptyState, ErrorState, Input, Select, Skeleton, Table, Td, Th } from "@/components/ui/primitives";
 import { ConfirmDialog } from "@/components/ui/dialog";
-import { PageHeader, StatCard } from "@/components/common";
+import { PageHeader, Pagination, StatCard } from "@/components/common";
+
+const PAGE_SIZE = 50;
 
 type Pending =
   | { kind: "role"; user: User; role: Role }
@@ -26,6 +28,11 @@ export function CustomersAdminPage() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<Role | "">("");
   const [pending, setPending] = useState<Pending | null>(null);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, roleFilter]);
 
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -112,6 +119,7 @@ export function CustomersAdminPage() {
         ) : visible.length === 0 ? (
           <EmptyState icon={<Users />} title="No users match" />
         ) : (
+          <>
           <Table>
             <thead>
               <tr>
@@ -123,7 +131,7 @@ export function CustomersAdminPage() {
               </tr>
             </thead>
             <tbody>
-              {visible.map((user) => {
+              {visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((user) => {
                 const self = user.id === me?.id;
                 return (
                   <tr key={user.id} className="hover:bg-muted/40" data-testid="admin-user-row">
@@ -186,6 +194,13 @@ export function CustomersAdminPage() {
               })}
             </tbody>
           </Table>
+          {visible.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between border-t border-border">
+              <span className="pl-4 text-sm text-subtle">{number(visible.length)} accounts</span>
+              <Pagination page={page} hasNext={page * PAGE_SIZE < visible.length} onChange={setPage} />
+            </div>
+          )}
+          </>
         )}
       </Card>
 
