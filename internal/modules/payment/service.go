@@ -538,6 +538,116 @@ func (s *Service) ProcessWebhook(
 	return nil
 }
 
+// VerifyPayment confirms a Razorpay Checkout success reported by the
+// customer's browser. The checkout signature proves the gateway payment
+// belongs to the gateway order, so the payment is completed exactly as a
+// payment.captured webhook would complete it; whichever of the two arrives
+// second is a no-op. Payments for orders the caller may not access are
+// reported as not found.
+func (s *Service) VerifyPayment(
+	ctx context.Context,
+	req VerifyPaymentRequest,
+	principal authz.Principal,
+) (*PaymentResponse, error) {
+
+	if err := s.gateway.VerifyCheckoutSignature(
+		ctx,
+		req.GatewayOrderID,
+		req.TransactionID,
+		req.Signature,
+	); err != nil {
+		return nil, err
+	}
+
+	tx := s.paymentRepository.Begin(ctx)
+
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+
+	defer rollbackOnPanic(tx)
+
+	payment, err := s.paymentRepository.GetByGatewayOrderIDTx(
+		ctx,
+		tx,
+		req.GatewayOrderID,
+	)
+	if err != nil {
+
+		tx.Rollback()
+
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrPaymentNotFound
+		}
+
+		return nil, err
+	}
+
+	// Lock the order first, as every other payment path does.
+	order, err := s.orderService.GetOrderForPaymentTx(
+		tx,
+		payment.OrderID,
+	)
+	if err != nil {
+		tx.Rollback()
+		return nil, mapOrderError(err)
+	}
+
+	if !principal.CanAccess(order.UserID) {
+		tx.Rollback()
+		return nil, ErrPaymentNotFound
+	}
+
+	payment, err = s.paymentRepository.GetByIDTx(
+		ctx,
+		tx,
+		payment.ID,
+	)
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	transactionID := req.TransactionID
+
+	if err := s.applyWebhookPaymentStatus(
+		ctx,
+		tx,
+		payment,
+		&transactionID,
+		models.PaymentSuccess,
+	); err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	payment, err = s.paymentRepository.GetByID(
+		ctx,
+		payment.ID,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"payment verified from checkout",
+		zap.String("payment_id", payment.ID.String()),
+		zap.String("order_id", payment.OrderID.String()),
+		zap.String("status", string(payment.Status)),
+	)
+
+	response := ToPaymentResponse(payment)
+
+	return &response, nil
+}
+
 // findWebhookPayment returns the payment a webhook refers to, read after
 // its order is locked.
 func (s *Service) findWebhookPayment(

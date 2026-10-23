@@ -69,6 +69,7 @@ func ToOrderListResponse(order *models.Order) OrderListResponse {
 		Status:      order.Status,
 		TotalAmount: order.TotalAmount,
 		TotalItems:  len(order.Items),
+		CreatedAt:   order.CreatedAt.Format(time.RFC3339),
 	}
 }
 

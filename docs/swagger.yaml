@@ -144,6 +144,19 @@ definitions:
       signature:
         type: string
     type: object
+  internal_modules_payment.VerifyPaymentRequest:
+    properties:
+      razorpay_order_id:
+        type: string
+      razorpay_payment_id:
+        type: string
+      razorpay_signature:
+        type: string
+    required:
+    - razorpay_order_id
+    - razorpay_payment_id
+    - razorpay_signature
+    type: object
   internal_modules_product.CreateProductRequest:
     properties:
       category_id:
@@ -1139,6 +1152,39 @@ paths:
       security:
       - BearerAuth: []
       summary: Get Payment Summary
+      tags:
+      - Payments
+  /payments/verify:
+    post:
+      consumes:
+      - application/json
+      description: Complete a payment from the Razorpay Checkout success response
+        (own orders only, unless admin). Idempotent with the payment.captured webhook.
+      parameters:
+      - description: Razorpay Checkout response
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_modules_payment.VerifyPaymentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Verify Checkout Payment
       tags:
       - Payments
   /payments/webhook:

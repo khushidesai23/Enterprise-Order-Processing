@@ -62,6 +62,18 @@ type PaymentListResponse struct {
 	Currency string `json:"currency"`
 
 	Gateway string `json:"gateway"`
+
+	CreatedAt string `json:"created_at"`
+}
+
+// Verify Payment: the fields Razorpay Checkout hands to its success
+// handler in the browser.
+type VerifyPaymentRequest struct {
+	GatewayOrderID string `json:"razorpay_order_id" binding:"required"`
+
+	TransactionID string `json:"razorpay_payment_id" binding:"required"`
+
+	Signature string `json:"razorpay_signature" binding:"required"`
 }
 
 // Razorpay Webhook

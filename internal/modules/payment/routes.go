@@ -28,6 +28,9 @@ func RegisterRoutes(
 		// Get Payment By Order
 		payments.GET("/order/:orderId", auth, handler.GetPaymentByOrder)
 
+		// Verify Checkout (browser-reported success, checked by its signature)
+		payments.POST("/verify", auth, handler.VerifyPayment)
+
 		// Razorpay Webhook (authenticated by its signature)
 		payments.POST("/webhook", handler.ProcessWebhook)
 

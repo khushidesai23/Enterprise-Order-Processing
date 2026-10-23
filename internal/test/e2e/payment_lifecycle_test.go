@@ -537,3 +537,59 @@ func TestWebhookEdgeCases(t *testing.T) {
 		l.assertState(orderID, models.OrderPaymentPending, checkout.PaymentID, models.PaymentPending, remaining, lifecycleQuantity)
 	})
 }
+
+func (l *lifecycle) verify(token, gatewayOrderID, paymentID, signature string) (int, testintegration.APIResponse) {
+	l.t.Helper()
+
+	return l.call(http.MethodPost, "/api/v1/payments/verify", map[string]interface{}{
+		"razorpay_order_id":   gatewayOrderID,
+		"razorpay_payment_id": paymentID,
+		"razorpay_signature":  signature,
+	}, token)
+}
+
+func TestLifecycleCheckoutVerification(t *testing.T) {
+	l := newLifecycle(t)
+	orderID := l.createOrder()
+	checkout := l.checkout(orderID)
+	signature := l.env.Gateway.SignCheckout(checkout.GatewayOrderID, "pay_checkout")
+
+	t.Run("forged signature is rejected", func(t *testing.T) {
+		code, _ := l.verify(l.customerToken, checkout.GatewayOrderID, "pay_checkout", "forged")
+
+		assert.Equal(t, http.StatusBadRequest, code)
+		l.assertState(orderID, models.OrderPaymentPending, checkout.PaymentID, models.PaymentPending, remaining, lifecycleQuantity)
+	})
+
+	t.Run("another customer cannot verify the payment", func(t *testing.T) {
+		testintegration.CreateUserFixture(t, testintegration.GormCreator(l.env.DB.DB), "Other", "Customer", "life-other@example.com", "password123")
+
+		code, _ := l.verify(l.login("life-other@example.com"), checkout.GatewayOrderID, "pay_checkout", signature)
+
+		assert.Equal(t, http.StatusNotFound, code)
+		l.assertState(orderID, models.OrderPaymentPending, checkout.PaymentID, models.PaymentPending, remaining, lifecycleQuantity)
+	})
+
+	t.Run("valid signature completes the payment", func(t *testing.T) {
+		code, api := l.verify(l.customerToken, checkout.GatewayOrderID, "pay_checkout", signature)
+
+		require.Equal(t, http.StatusOK, code, api.Error)
+		l.assertState(orderID, models.OrderPaid, checkout.PaymentID, models.PaymentSuccess, remaining, lifecycleQuantity)
+		assert.Equal(t, "pay_checkout", l.transactionID(checkout.PaymentID))
+	})
+
+	t.Run("verification and the capture webhook are idempotent", func(t *testing.T) {
+		code, api := l.verify(l.customerToken, checkout.GatewayOrderID, "pay_checkout", signature)
+		require.Equal(t, http.StatusOK, code, api.Error)
+
+		l.webhook("evt_capture_after_verify", "payment.captured", checkout.GatewayOrderID, "pay_checkout")
+		l.assertState(orderID, models.OrderPaid, checkout.PaymentID, models.PaymentSuccess, remaining, lifecycleQuantity)
+	})
+
+	t.Run("verified payment is refundable", func(t *testing.T) {
+		code, api := l.refund(checkout.PaymentID)
+
+		require.Equal(t, http.StatusOK, code, api.Error)
+		l.assertState(orderID, models.OrderCancelled, checkout.PaymentID, models.PaymentRefunded, inStock, 0)
+	})
+}

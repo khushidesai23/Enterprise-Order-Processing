@@ -60,6 +60,8 @@ type OrderListResponse struct {
 	TotalAmount float64 `json:"total_amount"`
 
 	TotalItems int `json:"total_items"`
+
+	CreatedAt string `json:"created_at"`
 }
 
 type OrderSummary struct {
