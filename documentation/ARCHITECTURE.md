@@ -127,14 +127,23 @@ Verify Signature
 Check Idempotency
     |
     v
-Persist Event
+Persist Event (duplicate event ID -> acknowledge, stop)
     |
     v
-Update Payment
+Lock Order, then re-read Payment
+    |
+    v
+Update Payment (never backwards: a late failure cannot undo a capture)
     |
     v
 Update Order
 ```
+
+A failed payment attempt leaves the order `PAYMENT_PENDING` with its stock
+reserved; checkout returns the same Razorpay order so the customer can
+retry. Refunds go through `PaymentGateway.RefundPayment`; the gateway call
+is the last step before commit, and the `refund.created` webhook reconciles
+the rare case where it succeeds but the commit does not.
 
 ## 7. Observability Architecture
 
