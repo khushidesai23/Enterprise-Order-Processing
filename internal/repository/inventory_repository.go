@@ -94,7 +94,7 @@ func (r *InventoryRepository) GetByProductIDTx(
 	return &inventory, nil
 }
 
-// GetAll returns all inventories.
+// GetAll returns the inventories of all live (not deleted) products.
 func (r *InventoryRepository) GetAll(
 	ctx context.Context,
 ) ([]models.Inventory, error) {
@@ -102,8 +102,9 @@ func (r *InventoryRepository) GetAll(
 	var inventories []models.Inventory
 
 	err := r.db.WithContext(ctx).
+		Joins("JOIN products ON products.id = inventories.product_id AND products.deleted_at IS NULL").
 		Preload("Product").
-		Order("created_at DESC").
+		Order("inventories.created_at DESC").
 		Find(&inventories).
 		Error
 

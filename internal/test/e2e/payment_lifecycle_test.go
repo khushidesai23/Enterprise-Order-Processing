@@ -669,3 +669,31 @@ func TestDeletedUniqueValuesCanBeReused(t *testing.T) {
 	remove(fmt.Sprintf("/api/v1/users/%s", create("/api/v1/users", user, "")))
 	create("/api/v1/users", user, "")
 }
+
+func TestInventoryListSkipsDeletedProducts(t *testing.T) {
+	l := newLifecycle(t)
+
+	listed := func() []struct {
+		ProductID   uuid.UUID `json:"product_id"`
+		ProductName string    `json:"product_name"`
+	} {
+		t.Helper()
+		code, api := l.call(http.MethodGet, "/api/v1/inventory", nil, l.adminToken)
+		require.Equal(t, http.StatusOK, code, api.Error)
+		var items []struct {
+			ProductID   uuid.UUID `json:"product_id"`
+			ProductName string    `json:"product_name"`
+		}
+		testintegration.DecodeData(t, api.Data, &items)
+		return items
+	}
+
+	items := listed()
+	require.Len(t, items, 1)
+	assert.Equal(t, l.productID, items[0].ProductID)
+	assert.Equal(t, "Lifecycle Product", items[0].ProductName)
+
+	code, api := l.call(http.MethodDelete, fmt.Sprintf("/api/v1/products/%s", l.productID), nil, l.adminToken)
+	require.Equal(t, http.StatusOK, code, api.Error)
+	assert.Empty(t, listed())
+}
