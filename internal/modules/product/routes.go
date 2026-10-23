@@ -16,6 +16,8 @@ func RegisterRoutes(
 
 		products.GET("", handler.GetProducts)
 
+		products.GET("/search", handler.SearchProducts)
+
 		products.GET("/:id", handler.GetProduct)
 
 		products.GET("/category/:categoryId", handler.GetProductsByCategory)

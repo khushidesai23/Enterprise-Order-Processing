@@ -18,6 +18,8 @@ var (
 	ErrInvalidPrice        = errors.New("price must be greater than zero")
 	ErrInvalidCategoryID   = errors.New("invalid category id")
 	ErrInvalidProductInput = errors.New("invalid product request")
+	ErrInvalidMRP          = errors.New("mrp must be zero or at least the price")
+	ErrInvalidSort         = errors.New("unknown sort order")
 
 	// Inventory Errors
 	ErrInventoryExists = errors.New("inventory already exists")

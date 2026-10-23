@@ -53,6 +53,7 @@ func ToOrderResponse(order *models.Order) OrderResponse {
 
 		orderItem.ProductName = item.Product.Name
 		orderItem.SKU = item.Product.SKU
+		orderItem.ImageURL = item.Product.ImageURL
 
 		items = append(items, orderItem)
 	}

@@ -28,6 +28,8 @@ func (d *Database) AutoMigrate() error {
 		&models.Payment{},
 
 		&models.PaymentWebhook{},
+
+		&models.Review{},
 	)
 
 	if err != nil {

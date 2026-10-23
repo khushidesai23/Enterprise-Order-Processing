@@ -29,6 +29,7 @@ type OrderItemResponse struct {
 	ProductID   uuid.UUID `json:"product_id"`
 	ProductName string    `json:"product_name"`
 	SKU         string    `json:"sku"`
+	ImageURL    string    `json:"image_url"`
 
 	Quantity int     `json:"quantity"`
 	Price    float64 `json:"price"`

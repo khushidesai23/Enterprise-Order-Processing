@@ -20,6 +20,7 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/order"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/payment"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/product"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/review"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/user"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 )
@@ -129,6 +130,10 @@ func NewRouter(options RouterOptions) (*gin.Engine, error) {
 	)
 	paymentHandler := payment.NewHandler(paymentService)
 
+	reviewRepository := repository.NewReviewRepository(options.Database.DB)
+	reviewService := review.NewService(reviewRepository, options.Logger)
+	reviewHandler := review.NewHandler(reviewService)
+
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(otelgin.Middleware(
@@ -151,6 +156,7 @@ func NewRouter(options RouterOptions) (*gin.Engine, error) {
 		inventoryHandler,
 		orderHandler,
 		paymentHandler,
+		reviewHandler,
 		authHandler,
 		jwtManager,
 	)
