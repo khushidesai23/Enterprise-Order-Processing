@@ -763,6 +763,18 @@ paths:
         minimum: 1
         name: page
         type: integer
+      - description: Only orders in this status (admins only; ignored for customers)
+        enum:
+        - CREATED
+        - PAYMENT_PENDING
+        - PAID
+        - PACKED
+        - SHIPPED
+        - DELIVERED
+        - CANCELLED
+        in: query
+        name: status
+        type: string
       - default: 50
         description: Orders per page
         in: query
@@ -964,6 +976,25 @@ paths:
       security:
       - BearerAuth: []
       summary: Get Orders by Authenticated User
+      tags:
+      - Orders
+  /orders/summary:
+    get:
+      description: Count orders per status (admin only)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Order Status Summary
       tags:
       - Orders
   /payments:

@@ -835,6 +835,21 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "CREATED",
+                            "PAYMENT_PENDING",
+                            "PAID",
+                            "PACKED",
+                            "SHIPPED",
+                            "DELIVERED",
+                            "CANCELLED"
+                        ],
+                        "type": "string",
+                        "description": "Only orders in this status (admins only; ignored for customers)",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
                         "maximum": 100,
                         "minimum": 1,
                         "type": "integer",
@@ -967,6 +982,37 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Count orders per status (admin only)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Order Status Summary",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
                         }

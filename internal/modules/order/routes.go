@@ -19,6 +19,9 @@ func RegisterRoutes(
 		// List Orders (all for admins, own for customers)
 		orders.GET("", auth, handler.GetOrders)
 
+		// Order counts per status
+		orders.GET("/summary", auth, admin, handler.GetOrderSummary)
+
 		// Get Orders By User
 		orders.GET("/me", auth, handler.GetOrdersByUser)
 

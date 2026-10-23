@@ -593,3 +593,38 @@ func TestLifecycleCheckoutVerification(t *testing.T) {
 		l.assertState(orderID, models.OrderCancelled, checkout.PaymentID, models.PaymentRefunded, inStock, 0)
 	})
 }
+
+func TestAdminOrderSummaryAndStatusFilter(t *testing.T) {
+	l := newLifecycle(t)
+	cancelled := l.createOrder()
+	code, api := l.cancel(cancelled)
+	require.Equal(t, http.StatusOK, code, api.Error)
+	open := l.createOrder()
+
+	code, api = l.call(http.MethodGet, "/api/v1/orders/summary", nil, l.adminToken)
+	require.Equal(t, http.StatusOK, code, api.Error)
+	var summary struct {
+		TotalOrders int64                        `json:"total_orders"`
+		ByStatus    map[models.OrderStatus]int64 `json:"by_status"`
+	}
+	testintegration.DecodeData(t, api.Data, &summary)
+	assert.EqualValues(t, 2, summary.TotalOrders)
+	assert.EqualValues(t, 1, summary.ByStatus[models.OrderCancelled])
+	assert.EqualValues(t, 1, summary.ByStatus[models.OrderCreated])
+	assert.Contains(t, summary.ByStatus, models.OrderDelivered, "every status is reported")
+
+	code, _ = l.call(http.MethodGet, "/api/v1/orders/summary", nil, l.customerToken)
+	assert.Equal(t, http.StatusForbidden, code)
+
+	code, api = l.call(http.MethodGet, "/api/v1/orders?status=CREATED", nil, l.adminToken)
+	require.Equal(t, http.StatusOK, code, api.Error)
+	var orders []struct {
+		ID uuid.UUID `json:"id"`
+	}
+	testintegration.DecodeData(t, api.Data, &orders)
+	require.Len(t, orders, 1)
+	assert.Equal(t, open, orders[0].ID)
+
+	code, _ = l.call(http.MethodGet, "/api/v1/orders?status=BOGUS", nil, l.adminToken)
+	assert.Equal(t, http.StatusBadRequest, code)
+}

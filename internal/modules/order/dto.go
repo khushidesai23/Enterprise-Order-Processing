@@ -64,6 +64,33 @@ type OrderListResponse struct {
 	CreatedAt string `json:"created_at"`
 }
 
+// OrderStatusSummary counts orders per status; every status is present.
+type OrderStatusSummary struct {
+	TotalOrders int64                        `json:"total_orders"`
+	ByStatus    map[models.OrderStatus]int64 `json:"by_status"`
+}
+
+var orderStatuses = []models.OrderStatus{
+	models.OrderCreated,
+	models.OrderPaymentPending,
+	models.OrderPaid,
+	models.OrderPacked,
+	models.OrderShipped,
+	models.OrderDelivered,
+	models.OrderCancelled,
+}
+
+// IsValidOrderStatus reports whether status is one of the known statuses.
+func IsValidOrderStatus(status models.OrderStatus) bool {
+	for _, known := range orderStatuses {
+		if status == known {
+			return true
+		}
+	}
+
+	return false
+}
+
 type OrderSummary struct {
 	TotalOrders      int64   `json:"total_orders"`
 	CompletedOrders  int64   `json:"completed_orders"`
