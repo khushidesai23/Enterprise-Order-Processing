@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/authz"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
@@ -248,10 +249,12 @@ func (s *Service) missingInventoryOrInsufficientStock(
 	return ErrInsufficientStock
 }
 
-// GetOrder returns a single order by its ID.
+// GetOrder returns a single order by its ID. Orders the caller may not
+// access are reported as not found so their existence is not revealed.
 func (s *Service) GetOrder(
 	ctx context.Context,
 	id uuid.UUID,
+	principal authz.Principal,
 ) (*OrderResponse, error) {
 
 	order, err := s.orderRepository.GetByID(
@@ -265,6 +268,10 @@ func (s *Service) GetOrder(
 		}
 
 		return nil, err
+	}
+
+	if !principal.CanAccess(order.UserID) {
+		return nil, ErrOrderNotFound
 	}
 
 	response := ToOrderResponse(order)
@@ -320,7 +327,7 @@ func (s *Service) GetOrderForPayment(
 	return order, nil
 }
 
-// GetOrders returns all orders.
+// GetOrders returns all orders. Callers must restrict it to admins.
 func (s *Service) GetOrders(
 	ctx context.Context,
 	page int,
@@ -595,9 +602,11 @@ func (s *Service) ConfirmShipment(
 }
 
 // CancelOrder cancels an order and releases any reserved inventory.
+// Customers may cancel only their own orders.
 func (s *Service) CancelOrder(
 	ctx context.Context,
 	id uuid.UUID,
+	principal authz.Principal,
 ) (*OrderResponse, error) {
 
 	tx := s.orderRepository.Begin(ctx)
@@ -622,6 +631,11 @@ func (s *Service) CancelOrder(
 		}
 
 		return nil, err
+	}
+
+	if !principal.CanAccess(order.UserID) {
+		tx.Rollback()
+		return nil, ErrOrderNotFound
 	}
 
 	if err := s.cancelOrderTx(

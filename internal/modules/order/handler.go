@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/response"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/authz"
 )
 
 type Handler struct {
@@ -41,21 +42,12 @@ func (h *Handler) CreateOrder(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetString("user_id")
-
-	id, err := uuid.Parse(userID)
-	if err != nil {
-
-		response.Error(
-			c,
-			http.StatusUnauthorized,
-			"invalid authenticated user",
-		)
-
+	principal, ok := authz.RequirePrincipal(c)
+	if !ok {
 		return
 	}
 
-	req.UserID = id
+	req.UserID = principal.UserID
 
 	order, err := h.service.CreateOrder(
 		c.Request.Context(),
@@ -105,9 +97,15 @@ func (h *Handler) GetOrder(c *gin.Context) {
 		return
 	}
 
+	principal, ok := authz.RequirePrincipal(c)
+	if !ok {
+		return
+	}
+
 	order, err := h.service.GetOrder(
 		c.Request.Context(),
 		id,
+		principal,
 	)
 
 	if err != nil {
@@ -129,7 +127,7 @@ func (h *Handler) GetOrder(c *gin.Context) {
 
 // GET /orders
 // @Summary Get Orders
-// @Description Get all orders
+// @Description Get all orders (admins) or the caller's own orders (customers)
 // @Tags Orders
 // @Security BearerAuth
 // @Accept json
@@ -137,11 +135,22 @@ func (h *Handler) GetOrder(c *gin.Context) {
 // @Param page query int false "Page number" default(1) minimum(1)
 // @Param limit query int false "Orders per page" default(50) minimum(1) maximum(100)
 // @Success 200 {object} response.APIResponse
+// @Failure 401 {object} response.APIResponse
 // @Failure 500 {object} response.APIResponse
 // @Router /orders [get]
 func (h *Handler) GetOrders(c *gin.Context) {
 	page, limit, ok := parseOrderPage(c)
 	if !ok {
+		return
+	}
+
+	principal, ok := authz.RequirePrincipal(c)
+	if !ok {
+		return
+	}
+
+	if !principal.IsAdmin() {
+		h.respondWithUserOrders(c, principal, page, limit)
 		return
 	}
 
@@ -174,21 +183,23 @@ func (h *Handler) GetOrdersByUser(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetString("user_id")
-
-	id, err := uuid.Parse(userID)
-	if err != nil {
-		response.Error(
-			c,
-			http.StatusUnauthorized,
-			"invalid authenticated user",
-		)
+	principal, ok := authz.RequirePrincipal(c)
+	if !ok {
 		return
 	}
 
+	h.respondWithUserOrders(c, principal, page, limit)
+}
+
+func (h *Handler) respondWithUserOrders(
+	c *gin.Context,
+	principal authz.Principal,
+	page int,
+	limit int,
+) {
 	orders, err := h.service.GetOrdersByUser(
 		c.Request.Context(),
-		id,
+		principal.UserID,
 		page,
 		limit,
 	)
@@ -248,7 +259,7 @@ func parseOrderPage(c *gin.Context) (int, int, bool) {
 
 // PATCH /orders/:id/status
 // @Summary Update Order Status
-// @Description Update the status of an order by ID
+// @Description Update the status of an order by ID (admin only)
 // @Tags Orders
 // @Security BearerAuth
 // @Accept json
@@ -257,6 +268,7 @@ func parseOrderPage(c *gin.Context) (int, int, bool) {
 // @Param status body UpdateOrderStatusRequest true "Order Status"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
+// @Failure 403 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
 // @Router /orders/{id}/status [patch]
 func (h *Handler) UpdateOrderStatus(c *gin.Context) {
@@ -304,7 +316,7 @@ func (h *Handler) UpdateOrderStatus(c *gin.Context) {
 
 // PATCH /orders/:id/cancel
 // @Summary Cancel Order
-// @Description Cancel an order by ID
+// @Description Cancel an order by ID (own orders only, unless admin)
 // @Tags Orders
 // @Security BearerAuth
 // @Accept json
@@ -322,9 +334,15 @@ func (h *Handler) CancelOrder(c *gin.Context) {
 		return
 	}
 
+	principal, ok := authz.RequirePrincipal(c)
+	if !ok {
+		return
+	}
+
 	order, err := h.service.CancelOrder(
 		c.Request.Context(),
 		id,
+		principal,
 	)
 	if err != nil {
 

@@ -8,4 +8,8 @@ var (
 	ErrUserNotFound = errors.New("user not found")
 
 	ErrInvalidPassword = errors.New("invalid password")
+
+	ErrInvalidRole = errors.New("invalid role")
+
+	ErrCannotChangeOwnRole = errors.New("admins cannot change their own role")
 )

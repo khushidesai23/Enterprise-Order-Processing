@@ -5,7 +5,14 @@ run starts from the same, known stock. Everything goes through the public API,
 so it works against any environment the API can reach (never point it at
 production data).
 
+    $env:LOCUST_ADMIN_EMAIL = "admin@example.com"
+    $env:LOCUST_ADMIN_PASSWORD = "..."
     python seed.py --host http://localhost:8080
+
+Catalog and inventory writes are admin-only, so they are made with the
+admin account from LOCUST_ADMIN_EMAIL / LOCUST_ADMIN_PASSWORD (promote an
+account once with `make promote-admin EMAIL=...`). The load-test user stays
+an ordinary customer, like real traffic.
 
 Creates (if missing):
   * user      loadtest@example.com (password from LOCUST_PASSWORD, or a
@@ -50,6 +57,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--host", default=os.getenv("LOCUST_HOST", "http://localhost:8080"))
     parser.add_argument("--email", default=os.getenv("LOCUST_EMAIL", "loadtest@example.com"))
+    parser.add_argument("--admin-email", default=os.getenv("LOCUST_ADMIN_EMAIL"),
+                        help="admin account used for catalog and inventory writes")
     parser.add_argument("--products", type=int, default=10, help="number of general load-test products")
     parser.add_argument("--stock", type=int, default=1_000_000, help="available units per general product")
     parser.add_argument("--contention-stock", type=int, default=100, help="available units for the contention product")
@@ -58,6 +67,10 @@ def main():
     host = args.host.rstrip("/")
     saved = read_env_file()
     password = os.getenv("LOCUST_PASSWORD") or saved.get("LOCUST_PASSWORD") or secrets.token_urlsafe(18)
+    admin_password = os.getenv("LOCUST_ADMIN_PASSWORD")
+    if not args.admin_email or not admin_password:
+        sys.exit("set LOCUST_ADMIN_EMAIL and LOCUST_ADMIN_PASSWORD to an admin account "
+                 "(register it, then run: make promote-admin EMAIL=<email>)")
     api = requests.Session()
 
     created = api.post(f"{host}/api/v1/users", json={
@@ -70,7 +83,14 @@ def main():
     if login.status_code != 200:
         sys.exit(f"login as {args.email} failed (HTTP {login.status_code}); "
                  "the user exists with another password: set LOCUST_PASSWORD")
-    api.headers["Authorization"] = f"Bearer {login.json()['data']['token']}"
+
+    admin_login = api.post(f"{host}/api/v1/auth/login",
+                           json={"email": args.admin_email, "password": admin_password}, timeout=10)
+    if admin_login.status_code != 200:
+        sys.exit(f"login as admin {args.admin_email} failed (HTTP {admin_login.status_code})")
+    if admin_login.json()["data"]["user"].get("role") != "admin":
+        sys.exit(f"{args.admin_email} is not an admin: run make promote-admin EMAIL={args.admin_email}")
+    api.headers["Authorization"] = f"Bearer {admin_login.json()['data']['token']}"
 
     category = next((c for c in data(api.get(f"{host}/api/v1/categories", timeout=30)) or [] if c["name"] == CATEGORY), None)
     if category is None:

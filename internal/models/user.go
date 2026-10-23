@@ -13,4 +13,6 @@ type User struct {
 	Password string `gorm:"size:255;not null" json:"-"`
 
 	IsActive bool `gorm:"default:true" json:"is_active"`
+
+	Role Role `gorm:"size:20;not null;default:customer" json:"role"`
 }

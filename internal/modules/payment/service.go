@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/authz"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
 	ordermodule "github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/order"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
@@ -71,9 +72,11 @@ func NewService(
 }
 
 // CreatePayment creates a payment and generates a Razorpay order.
+// Customers may pay only for their own orders.
 func (s *Service) CreatePayment(
 	ctx context.Context,
 	req CreatePaymentRequest,
+	principal authz.Principal,
 ) (*CheckoutResponse, error) {
 
 	tx := s.paymentRepository.Begin(ctx)
@@ -91,6 +94,11 @@ func (s *Service) CreatePayment(
 	if err != nil {
 		tx.Rollback()
 		return nil, mapOrderError(err)
+	}
+
+	if !principal.CanAccess(orderModel.UserID) {
+		tx.Rollback()
+		return nil, ErrOrderNotFound
 	}
 
 	if err := s.validateOrderForPayment(orderModel.Status); err != nil {
@@ -197,10 +205,12 @@ func (s *Service) CreatePayment(
 	return &response, nil
 }
 
-// GetPayment returns a payment by its ID.
+// GetPayment returns a payment by its ID. Payments for orders the caller
+// may not access are reported as not found.
 func (s *Service) GetPayment(
 	ctx context.Context,
 	id uuid.UUID,
+	principal authz.Principal,
 ) (*PaymentResponse, error) {
 
 	payment, err := s.paymentRepository.GetByID(
@@ -216,12 +226,33 @@ func (s *Service) GetPayment(
 		return nil, err
 	}
 
+	// Ownership lives on the order, so only non-admins pay for the lookup.
+	if !principal.IsAdmin() {
+
+		order, err := s.orderService.GetOrderForPayment(
+			ctx,
+			payment.OrderID,
+		)
+		if err != nil {
+
+			if errors.Is(err, ordermodule.ErrOrderNotFound) {
+				return nil, ErrPaymentNotFound
+			}
+
+			return nil, err
+		}
+
+		if !principal.CanAccess(order.UserID) {
+			return nil, ErrPaymentNotFound
+		}
+	}
+
 	response := ToPaymentResponse(payment)
 
 	return &response, nil
 }
 
-// GetPayments returns all payments.
+// GetPayments returns all payments. Callers must restrict it to admins.
 func (s *Service) GetPayments(
 	ctx context.Context,
 ) ([]PaymentListResponse, error) {
@@ -236,17 +267,23 @@ func (s *Service) GetPayments(
 	return ToPaymentList(payments), nil
 }
 
-// GetPaymentByOrder returns the payment for an order.
+// GetPaymentByOrder returns the payment for an order the caller may access.
 func (s *Service) GetPaymentByOrder(
 	ctx context.Context,
 	orderID uuid.UUID,
+	principal authz.Principal,
 ) (*PaymentResponse, error) {
 
-	if _, err := s.orderService.GetOrderForPayment(
+	order, err := s.orderService.GetOrderForPayment(
 		ctx,
 		orderID,
-	); err != nil {
+	)
+	if err != nil {
 		return nil, mapOrderError(err)
+	}
+
+	if !principal.CanAccess(order.UserID) {
+		return nil, ErrOrderNotFound
 	}
 
 	payment, err := s.paymentRepository.GetByOrderID(
@@ -267,7 +304,8 @@ func (s *Service) GetPaymentByOrder(
 	return &response, nil
 }
 
-// GetPaymentSummary returns overall payment statistics.
+// GetPaymentSummary returns overall payment statistics. Callers must
+// restrict it to admins.
 func (s *Service) GetPaymentSummary(
 	ctx context.Context,
 ) (*PaymentSummary, error) {

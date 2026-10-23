@@ -8,7 +8,7 @@ import (
 func TestJWTManagerGenerateAndVerifyToken(t *testing.T) {
 	manager := NewJWTManager("secret", time.Hour)
 
-	token, err := manager.GenerateToken("user-1", "user@example.com")
+	token, err := manager.GenerateToken("user-1", "user@example.com", "admin")
 	if err != nil {
 		t.Fatalf("GenerateToken() error = %v", err)
 	}
@@ -24,6 +24,10 @@ func TestJWTManagerGenerateAndVerifyToken(t *testing.T) {
 
 	if claims.Email != "user@example.com" {
 		t.Fatalf("expected email user@example.com, got %s", claims.Email)
+	}
+
+	if claims.Role != "admin" {
+		t.Fatalf("expected role admin, got %s", claims.Role)
 	}
 }
 

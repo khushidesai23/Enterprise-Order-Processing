@@ -814,7 +814,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get all orders",
+                "description": "Get all orders (admins) or the caller's own orders (customers)",
                 "consumes": [
                     "application/json"
                 ],
@@ -847,6 +847,12 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
                         }
@@ -1024,7 +1030,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Cancel an order by ID",
+                "description": "Cancel an order by ID (own orders only, unless admin)",
                 "consumes": [
                     "application/json"
                 ],
@@ -1073,7 +1079,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Update the status of an order by ID",
+                "description": "Update the status of an order by ID (admin only)",
                 "consumes": [
                     "application/json"
                 ],
@@ -1115,6 +1121,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
@@ -1131,7 +1143,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get all payments",
+                "description": "Get all payments (admin only)",
                 "consumes": [
                     "application/json"
                 ],
@@ -1145,6 +1157,12 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
                         }
@@ -1263,7 +1281,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get a summary of payments",
+                "description": "Get a summary of payments (admin only)",
                 "consumes": [
                     "application/json"
                 ],
@@ -1277,6 +1295,12 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
                         }
@@ -1398,7 +1422,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Refund a payment by ID",
+                "description": "Refund a payment by ID (admin only)",
                 "consumes": [
                     "application/json"
                 ],
@@ -1427,6 +1451,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
                         }
@@ -1728,7 +1758,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get a list of all users",
+                "description": "Get a list of all users (admin only)",
                 "consumes": [
                     "application/json"
                 ],
@@ -1742,6 +1772,12 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
                         }
@@ -1806,7 +1842,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get user details by ID",
+                "description": "Get user details by ID (own profile only, unless admin)",
                 "consumes": [
                     "application/json"
                 ],
@@ -1847,7 +1883,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Update user details by ID",
+                "description": "Update user details by ID (own profile only, unless admin; only admins may change is_active)",
                 "consumes": [
                     "application/json"
                 ],
@@ -1889,6 +1925,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
@@ -1903,7 +1945,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Delete user by ID",
+                "description": "Delete user by ID (admin only)",
                 "consumes": [
                     "application/json"
                 ],
@@ -1926,6 +1968,76 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{id}/role": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Change a user's role (admin only). Admins cannot change their own role.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Update User Role",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Role",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_modules_user.UpdateUserRoleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
                         }
@@ -1978,6 +2090,17 @@ const docTemplate = `{
                 "OrderShipped",
                 "OrderDelivered",
                 "OrderCancelled"
+            ]
+        },
+        "github_com_khushidesai23_Enterprise-Order-Processing_internal_models.Role": {
+            "type": "string",
+            "enum": [
+                "customer",
+                "admin"
+            ],
+            "x-enum-varnames": [
+                "RoleCustomer",
+                "RoleAdmin"
             ]
         },
         "internal_modules_auth.LoginRequest": {
@@ -2237,6 +2360,17 @@ const docTemplate = `{
                 },
                 "last_name": {
                     "type": "string"
+                }
+            }
+        },
+        "internal_modules_user.UpdateUserRoleRequest": {
+            "type": "object",
+            "required": [
+                "role"
+            ],
+            "properties": {
+                "role": {
+                    "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_models.Role"
                 }
             }
         }

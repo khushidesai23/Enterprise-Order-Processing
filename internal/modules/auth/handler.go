@@ -113,6 +113,16 @@ func (h *Handler) Me(c *gin.Context) {
 
 	if err != nil {
 
+		if errors.Is(err, ErrInvalidToken) {
+			response.Error(
+				c,
+				http.StatusUnauthorized,
+				err.Error(),
+			)
+
+			return
+		}
+
 		response.Error(
 			c,
 			http.StatusInternalServerError,

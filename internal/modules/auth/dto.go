@@ -29,4 +29,6 @@ type UserInfo struct {
 	Email string `json:"email"`
 
 	IsActive bool `json:"is_active"`
+
+	Role string `json:"role"`
 }

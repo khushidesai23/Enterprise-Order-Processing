@@ -17,6 +17,7 @@ import (
 type Service interface {
 	Create(ctx context.Context, req CreateUserRequest) (*UserResponse, error)
 	Update(ctx context.Context, id uuid.UUID, req UpdateUserRequest) (*UserResponse, error)
+	UpdateRole(ctx context.Context, id uuid.UUID, role models.Role) (*UserResponse, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*UserResponse, error)
 	List(ctx context.Context) ([]UserResponse, error)
 	Delete(ctx context.Context, id uuid.UUID) error
@@ -71,6 +72,8 @@ func (s *service) Create(
 		Email:     req.Email,
 		Password:  hashedPassword,
 		IsActive:  true,
+		// Registration never grants privileges; admins promote users.
+		Role: models.RoleCustomer,
 	}
 
 	if err := s.repository.Create(ctx, user); err != nil {
@@ -126,6 +129,45 @@ func (s *service) Update(
 		s.log,
 		"user updated",
 		zap.String("user_id", user.ID.String()),
+	)
+
+	resp := ToResponse(user)
+
+	return &resp, nil
+}
+
+func (s *service) UpdateRole(
+	ctx context.Context,
+	id uuid.UUID,
+	role models.Role,
+) (*UserResponse, error) {
+
+	if !role.Valid() {
+		return nil, ErrInvalidRole
+	}
+
+	user, err := s.repository.GetByID(ctx, id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if user == nil {
+		return nil, ErrUserNotFound
+	}
+
+	user.Role = role
+
+	if err := s.repository.Update(ctx, user); err != nil {
+		return nil, err
+	}
+
+	logger.InfoContext(
+		ctx,
+		s.log,
+		"user role updated",
+		zap.String("user_id", user.ID.String()),
+		zap.String("role", string(role)),
 	)
 
 	resp := ToResponse(user)

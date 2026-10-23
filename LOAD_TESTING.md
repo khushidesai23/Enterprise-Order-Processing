@@ -66,8 +66,15 @@ README). Results recorded before this branch ran against such a native server.
 cd locust
 python -m venv .venv-locust
 .\.venv-locust\Scripts\pip install -r requirements.txt
+$env:LOCUST_ADMIN_EMAIL = "admin@example.com"   # a registered user promoted
+$env:LOCUST_ADMIN_PASSWORD = "..."              # with make promote-admin
 .\.venv-locust\Scripts\python seed.py --host http://localhost:8080
 ```
+
+Catalog and inventory writes are admin-only, so `seed.py` makes them with
+the admin account above. The load-test user it creates is an ordinary
+customer, like real traffic, and `loadtest.env` never holds admin
+credentials.
 
 `seed.py` (idempotent, API only) creates or resets:
 
@@ -330,6 +337,7 @@ Not changed, with reasons:
 |---|---|
 | `Stock below LOCUST_MIN_STOCK` and the run quits | Run `python seed.py` (resets stock). |
 | `Set LOCUST_EMAIL and LOCUST_PASSWORD` | Run `seed.py` from `locust/`; it writes `loadtest.env`. |
+| `seed.py`: `set LOCUST_ADMIN_EMAIL...` or `... is not an admin` | Register the account, run `make promote-admin EMAIL=<email>`, set both variables. |
 | `seed.py`: login failed, user exists with another password | Set `$env:LOCUST_PASSWORD` to that user's password, or use `--email` for a new user. |
 | Prometheus target `locust` DOWN | Normal when Locust is not running; with Locust running check port 9646 and `LOCUST_METRICS_PORT`. |
 | Target `order-processing-api` DOWN | API not running on the host, or Docker cannot reach `host.docker.internal:8080`. |

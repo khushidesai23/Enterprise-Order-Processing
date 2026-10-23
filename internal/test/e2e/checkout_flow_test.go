@@ -119,6 +119,35 @@ func TestCheckoutFlowEndToEnd(t *testing.T) {
 	)
 	require.Equal(t, http.StatusOK, meRecorder.Code, meRecorder.Body.String())
 
+	loginAs := func(email string) string {
+		t.Helper()
+		recorder := testintegration.JSONRequest(t, env.Router, http.MethodPost, "/api/v1/auth/login",
+			map[string]interface{}{"email": email, "password": "password123"}, "", nil)
+		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+		var response loginResponse
+		testintegration.DecodeData(t, testintegration.DecodeAPIResponse(t, recorder).Data, &response)
+		return response.Token
+	}
+
+	statusOf := func(method string, path string, body interface{}, token string) int {
+		t.Helper()
+		return testintegration.JSONRequest(t, env.Router, method, path, body, token, nil).Code
+	}
+
+	creator := testintegration.GormCreator(env.DB.DB)
+	testintegration.CreateAdminFixture(t, creator, "E2E", "Admin", "e2e-admin@example.com", "password123")
+	adminToken := loginAs("e2e-admin@example.com")
+	testintegration.CreateUserFixture(t, creator, "E2E", "Intruder", "e2e-intruder@example.com", "password123")
+	intruderToken := loginAs("e2e-intruder@example.com")
+
+	// Self-registration cannot grant privileges.
+	assert.Equal(t, http.StatusForbidden, statusOf(http.MethodPost, "/api/v1/categories",
+		map[string]interface{}{"name": "Nope", "description": "customer write"}, login.Token))
+	assert.Equal(t, http.StatusForbidden, statusOf(http.MethodGet, "/api/v1/users", nil, login.Token))
+	assert.Equal(t, http.StatusNotFound, statusOf(http.MethodGet, "/api/v1/users/"+createdUser.ID, nil, intruderToken))
+	assert.Equal(t, http.StatusForbidden, statusOf(http.MethodPut, "/api/v1/users/"+createdUser.ID,
+		map[string]interface{}{"is_active": false}, login.Token))
+
 	createCategoryRecorder := testintegration.JSONRequest(
 		t,
 		env.Router,
@@ -128,7 +157,7 @@ func TestCheckoutFlowEndToEnd(t *testing.T) {
 			"name":        "E2E Category",
 			"description": "category for e2e",
 		},
-		login.Token,
+		adminToken,
 		nil,
 	)
 	require.Equal(t, http.StatusCreated, createCategoryRecorder.Code, createCategoryRecorder.Body.String())
@@ -150,7 +179,7 @@ func TestCheckoutFlowEndToEnd(t *testing.T) {
 			"price":       1499.5,
 			"category_id": categoryID,
 		},
-		login.Token,
+		adminToken,
 		nil,
 	)
 	require.Equal(t, http.StatusCreated, createProductRecorder.Code, createProductRecorder.Body.String())
@@ -159,6 +188,9 @@ func TestCheckoutFlowEndToEnd(t *testing.T) {
 	var product productResponse
 	testintegration.DecodeData(t, createProductAPI.Data, &product)
 	productID := uuid.MustParse(product.ID)
+
+	assert.Equal(t, http.StatusForbidden, statusOf(http.MethodPost, "/api/v1/inventory",
+		map[string]interface{}{"product_id": productID, "available_quantity": 1000}, login.Token))
 
 	addInventoryRecorder := testintegration.JSONRequest(
 		t,
@@ -169,7 +201,7 @@ func TestCheckoutFlowEndToEnd(t *testing.T) {
 			"product_id":         productID,
 			"available_quantity": 10,
 		},
-		login.Token,
+		adminToken,
 		nil,
 	)
 	require.Equal(t, http.StatusCreated, addInventoryRecorder.Code, addInventoryRecorder.Body.String())
@@ -203,6 +235,20 @@ func TestCheckoutFlowEndToEnd(t *testing.T) {
 	orderID := uuid.MustParse(order.ID)
 	assert.Equal(t, models.OrderCreated, order.Status)
 
+	// Another customer can neither see, cancel nor pay for this order, and
+	// gets the same 404 as for an order that does not exist.
+	orderPath := fmt.Sprintf("/api/v1/orders/%s", orderID)
+	assert.Equal(t, http.StatusNotFound, statusOf(http.MethodGet, orderPath, nil, intruderToken))
+	assert.Equal(t, http.StatusNotFound, statusOf(http.MethodPatch, orderPath+"/cancel", nil, intruderToken))
+	assert.Equal(t, http.StatusNotFound, statusOf(http.MethodPost, "/api/v1/payments",
+		map[string]interface{}{"order_id": orderID}, intruderToken))
+
+	intruderOrdersRecorder := testintegration.JSONRequest(t, env.Router, http.MethodGet, "/api/v1/orders", nil, intruderToken, nil)
+	require.Equal(t, http.StatusOK, intruderOrdersRecorder.Code, intruderOrdersRecorder.Body.String())
+	var intruderOrders []ordermodule.OrderListResponse
+	testintegration.DecodeData(t, testintegration.DecodeAPIResponse(t, intruderOrdersRecorder).Data, &intruderOrders)
+	assert.Empty(t, intruderOrders)
+
 	createPaymentRecorder := testintegration.JSONRequest(
 		t,
 		env.Router,
@@ -220,6 +266,12 @@ func TestCheckoutFlowEndToEnd(t *testing.T) {
 	var checkout paymentResponse
 	testintegration.DecodeData(t, createPaymentAPI.Data, &checkout)
 	paymentID := uuid.MustParse(checkout.PaymentID)
+
+	assert.Equal(t, http.StatusNotFound, statusOf(http.MethodGet, "/api/v1/payments/"+paymentID.String(), nil, intruderToken))
+	assert.Equal(t, http.StatusNotFound, statusOf(http.MethodGet, "/api/v1/payments/order/"+orderID.String(), nil, intruderToken))
+	assert.Equal(t, http.StatusOK, statusOf(http.MethodGet, "/api/v1/payments/"+paymentID.String(), nil, login.Token))
+	assert.Equal(t, http.StatusForbidden, statusOf(http.MethodGet, "/api/v1/payments", nil, login.Token))
+	assert.Equal(t, http.StatusForbidden, statusOf(http.MethodGet, "/api/v1/payments/summary", nil, login.Token))
 
 	webhookBody := map[string]interface{}{
 		"event":      "payment.captured",
@@ -260,6 +312,12 @@ func TestCheckoutFlowEndToEnd(t *testing.T) {
 	)
 	require.Equal(t, http.StatusOK, webhookRecorder.Code, webhookRecorder.Body.String())
 
+	// Customers cannot drive fulfilment or refund themselves, not even on
+	// their own order.
+	assert.Equal(t, http.StatusForbidden, statusOf(http.MethodPatch, orderPath+"/status",
+		map[string]interface{}{"status": models.OrderPacked}, login.Token))
+	assert.Equal(t, http.StatusForbidden, statusOf(http.MethodPost, "/api/v1/payments/"+paymentID.String()+"/refund", nil, login.Token))
+
 	packRecorder := testintegration.JSONRequest(
 		t,
 		env.Router,
@@ -268,7 +326,7 @@ func TestCheckoutFlowEndToEnd(t *testing.T) {
 		map[string]interface{}{
 			"status": models.OrderPacked,
 		},
-		login.Token,
+		adminToken,
 		nil,
 	)
 	require.Equal(t, http.StatusOK, packRecorder.Code, packRecorder.Body.String())
@@ -281,7 +339,7 @@ func TestCheckoutFlowEndToEnd(t *testing.T) {
 		map[string]interface{}{
 			"status": models.OrderShipped,
 		},
-		login.Token,
+		adminToken,
 		nil,
 	)
 	require.Equal(t, http.StatusOK, shipRecorder.Code, shipRecorder.Body.String())

@@ -19,6 +19,36 @@ func CreateUserFixture(
 ) *models.User {
 	t.Helper()
 
+	return createUserFixture(t, db, firstName, lastName, email, password, models.RoleCustomer)
+}
+
+// CreateAdminFixture creates a user with the admin role. The API never
+// grants that role on registration, so tests that need an admin seed one
+// directly.
+func CreateAdminFixture(
+	t testing.TB,
+	db interface{ Create(value interface{}) error },
+	firstName string,
+	lastName string,
+	email string,
+	password string,
+) *models.User {
+	t.Helper()
+
+	return createUserFixture(t, db, firstName, lastName, email, password, models.RoleAdmin)
+}
+
+func createUserFixture(
+	t testing.TB,
+	db interface{ Create(value interface{}) error },
+	firstName string,
+	lastName string,
+	email string,
+	password string,
+	role models.Role,
+) *models.User {
+	t.Helper()
+
 	hashedPassword, err := utils.HashPassword(password)
 	if err != nil {
 		t.Fatalf("HashPassword() error = %v", err)
@@ -30,6 +60,7 @@ func CreateUserFixture(
 		Email:     email,
 		Password:  hashedPassword,
 		IsActive:  true,
+		Role:      role,
 	}
 
 	if err := db.Create(user); err != nil {
