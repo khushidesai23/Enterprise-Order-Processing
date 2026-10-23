@@ -83,6 +83,10 @@ func (m *webhookRepositoryMock) Create(ctx context.Context, tx *gorm.DB, webhook
 	return m.Called(ctx, tx, webhook).Error(0)
 }
 
+func (m *webhookRepositoryMock) MarkFailed(ctx context.Context, tx *gorm.DB, payloadID string, processedAt time.Time) error {
+	return m.Called(ctx, tx, payloadID, processedAt).Error(0)
+}
+
 func (m *webhookRepositoryMock) MarkProcessed(ctx context.Context, tx *gorm.DB, payloadID string, processedAt time.Time) error {
 	return m.Called(ctx, tx, payloadID, processedAt).Error(0)
 }
@@ -111,10 +115,6 @@ func (m *paymentOrderServiceMock) MarkOrderPaid(tx *gorm.DB, orderID uuid.UUID) 
 	return m.Called(tx, orderID).Error(0)
 }
 
-func (m *paymentOrderServiceMock) CancelOrderByPaymentFailure(tx *gorm.DB, orderID uuid.UUID) error {
-	return m.Called(tx, orderID).Error(0)
-}
-
 func (m *paymentOrderServiceMock) RefundOrder(tx *gorm.DB, orderID uuid.UUID) error {
 	return m.Called(tx, orderID).Error(0)
 }
@@ -135,6 +135,12 @@ func (m *paymentGatewayMock) VerifyCheckoutSignature(ctx context.Context, orderI
 
 func (m *paymentGatewayMock) VerifyWebhookSignature(ctx context.Context, body []byte, signature string) error {
 	return m.Called(ctx, body, signature).Error(0)
+}
+
+func (m *paymentGatewayMock) RefundPayment(ctx context.Context, req GatewayRefundRequest) (*GatewayRefundResponse, error) {
+	args := m.Called(ctx, req)
+	response, _ := args.Get(0).(*GatewayRefundResponse)
+	return response, args.Error(1)
 }
 
 func testPaymentService(repo *paymentRepositoryMock, webhookRepo *webhookRepositoryMock, orderService *paymentOrderServiceMock, gateway *paymentGatewayMock) *Service {
@@ -185,7 +191,7 @@ func TestApplyWebhookPaymentStatusSuccess(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestApplyWebhookPaymentStatusFailedCancelsOrder(t *testing.T) {
+func TestApplyWebhookPaymentStatusFailedKeepsOrderOpenForRetry(t *testing.T) {
 	ctx := context.Background()
 	repo := new(paymentRepositoryMock)
 	orderService := new(paymentOrderServiceMock)
@@ -199,11 +205,126 @@ func TestApplyWebhookPaymentStatusFailedCancelsOrder(t *testing.T) {
 	}
 
 	repo.On("CompletePayment", ctx, tx, paymentModel.ID, &transactionID, models.PaymentFailed).Return(nil).Once()
-	orderService.On("CancelOrderByPaymentFailure", tx, paymentModel.OrderID).Return(nil).Once()
 
 	err := service.applyWebhookPaymentStatus(ctx, tx, paymentModel, &transactionID, models.PaymentFailed)
 
 	require.NoError(t, err)
+	repo.AssertExpectations(t)
+	// The order must not be touched: it stays PAYMENT_PENDING with its
+	// stock reserved so the customer can retry.
+	orderService.AssertNotCalled(t, "RefundOrder", mock.Anything, mock.Anything)
+	orderService.AssertNotCalled(t, "MarkOrderPaid", mock.Anything, mock.Anything)
+}
+
+func TestApplyWebhookPaymentStatusCaptureAfterFailedAttempt(t *testing.T) {
+	ctx := context.Background()
+	repo := new(paymentRepositoryMock)
+	orderService := new(paymentOrderServiceMock)
+	service := testPaymentService(repo, new(webhookRepositoryMock), orderService, new(paymentGatewayMock))
+	tx := &gorm.DB{}
+	transactionID := "pay_second_attempt"
+	paymentModel := &models.Payment{
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		OrderID:   uuid.New(),
+		Status:    models.PaymentFailed,
+	}
+
+	repo.On("CompletePayment", ctx, tx, paymentModel.ID, &transactionID, models.PaymentSuccess).Return(nil).Once()
+	orderService.On("MarkOrderPaid", tx, paymentModel.OrderID).Return(nil).Once()
+
+	err := service.applyWebhookPaymentStatus(ctx, tx, paymentModel, &transactionID, models.PaymentSuccess)
+
+	require.NoError(t, err)
+	repo.AssertExpectations(t)
+	orderService.AssertExpectations(t)
+}
+
+// Out-of-order and duplicate deliveries must not move a payment backwards.
+func TestApplyWebhookPaymentStatusIgnoresStaleEvents(t *testing.T) {
+	tests := []struct {
+		name    string
+		current models.PaymentStatus
+		event   models.PaymentStatus
+	}{
+		{name: "failure after capture", current: models.PaymentSuccess, event: models.PaymentFailed},
+		{name: "failure after refund", current: models.PaymentRefunded, event: models.PaymentFailed},
+		{name: "capture after refund", current: models.PaymentRefunded, event: models.PaymentSuccess},
+		{name: "duplicate capture", current: models.PaymentSuccess, event: models.PaymentSuccess},
+		{name: "duplicate failure", current: models.PaymentFailed, event: models.PaymentFailed},
+		{name: "duplicate refund", current: models.PaymentRefunded, event: models.PaymentRefunded},
+		{name: "authorization", current: models.PaymentPending, event: models.PaymentPending},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repo := new(paymentRepositoryMock)
+			orderService := new(paymentOrderServiceMock)
+			service := testPaymentService(repo, new(webhookRepositoryMock), orderService, new(paymentGatewayMock))
+			paymentModel := &models.Payment{
+				BaseModel: models.BaseModel{ID: uuid.New()},
+				OrderID:   uuid.New(),
+				Status:    test.current,
+			}
+			transactionID := "pay_x"
+
+			err := service.applyWebhookPaymentStatus(context.Background(), &gorm.DB{}, paymentModel, &transactionID, test.event)
+
+			require.NoError(t, err)
+			// No expectations were set: any repository or order call fails the mock.
+			repo.AssertExpectations(t)
+			orderService.AssertExpectations(t)
+		})
+	}
+}
+
+func TestApplyWebhookPaymentStatusCaptureForCancelledOrderIsAcknowledged(t *testing.T) {
+	ctx := context.Background()
+	repo := new(paymentRepositoryMock)
+	orderService := new(paymentOrderServiceMock)
+	service := testPaymentService(repo, new(webhookRepositoryMock), orderService, new(paymentGatewayMock))
+	tx := &gorm.DB{}
+	transactionID := "pay_late"
+	paymentModel := &models.Payment{
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		OrderID:   uuid.New(),
+		Status:    models.PaymentPending,
+	}
+
+	repo.On("CompletePayment", ctx, tx, paymentModel.ID, &transactionID, models.PaymentSuccess).Return(nil).Once()
+	orderService.On("MarkOrderPaid", tx, paymentModel.OrderID).Return(ordermodule.ErrOrderAlreadyCancelled).Once()
+
+	err := service.applyWebhookPaymentStatus(ctx, tx, paymentModel, &transactionID, models.PaymentSuccess)
+
+	// Recorded as captured (so it can be refunded) and acknowledged.
+	require.NoError(t, err)
+	repo.AssertExpectations(t)
+}
+
+func TestProcessWebhookAcknowledgesUnhandledEvents(t *testing.T) {
+	for name, body := range map[string]string{
+		"order.paid":       `{"event":"order.paid"}`,
+		"refund.processed": `{"event":"refund.processed"}`,
+		"partial refund":   `{"event":"refund.created","payload":{"payment":{"entity":{"id":"pay_1","order_id":"order_1","refund_status":"partial"}}}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			gateway := new(paymentGatewayMock)
+			repo := new(paymentRepositoryMock)
+			service := testPaymentService(repo, new(webhookRepositoryMock), new(paymentOrderServiceMock), gateway)
+			gateway.On("VerifyWebhookSignature", ctx, []byte(body), "sig").Return(nil).Once()
+
+			err := service.ProcessWebhook(ctx, ProcessWebhookRequest{Body: []byte(body), Signature: "sig", EventID: "evt_1"})
+
+			require.NoError(t, err)
+			repo.AssertNotCalled(t, "Begin", mock.Anything)
+		})
+	}
+}
+
+func TestToPaiseRounds(t *testing.T) {
+	assert.Equal(t, 1999, toPaise(19.99))
+	assert.Equal(t, 149950, toPaise(1499.5))
+	assert.Equal(t, 1, toPaise(0.01))
 }
 
 func TestApplyWebhookPaymentStatusRefunded(t *testing.T) {

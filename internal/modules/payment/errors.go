@@ -6,9 +6,8 @@ var (
 	// Payment Errors
 	ErrPaymentNotFound         = errors.New("payment not found")
 	ErrPaymentAlreadyCompleted = errors.New("payment already completed")
-	ErrPaymentAlreadyFailed    = errors.New("payment already failed")
 	ErrPaymentPending          = errors.New("payment is still pending")
-	ErrPaymentNotPending       = errors.New("payment is not pending")
+	ErrPaymentNotRefundable    = errors.New("only captured payments can be refunded")
 
 	// Order Errors
 	ErrOrderNotFound              = errors.New("order not found")
@@ -21,6 +20,7 @@ var (
 	ErrGatewayVerification  = errors.New("payment verification failed")
 	ErrInvalidSignature     = errors.New("invalid payment signature")
 	ErrUnsupportedGateway   = errors.New("unsupported payment gateway")
+	ErrGatewayRefund        = errors.New("payment gateway refund failed")
 
 	// Webhook Errors
 	ErrDuplicateWebhook    = errors.New("duplicate webhook received")
