@@ -628,3 +628,44 @@ func TestAdminOrderSummaryAndStatusFilter(t *testing.T) {
 	code, _ = l.call(http.MethodGet, "/api/v1/orders?status=BOGUS", nil, l.adminToken)
 	assert.Equal(t, http.StatusBadRequest, code)
 }
+
+// Soft-deleted rows must not keep their unique values: a deleted category
+// name, product SKU or user email can be used again.
+func TestDeletedUniqueValuesCanBeReused(t *testing.T) {
+	l := newLifecycle(t)
+
+	create := func(path string, body map[string]interface{}, token string) uuid.UUID {
+		t.Helper()
+		code, api := l.call(http.MethodPost, path, body, token)
+		require.Equal(t, http.StatusCreated, code, api.Error)
+		var created struct {
+			ID uuid.UUID `json:"id"`
+		}
+		testintegration.DecodeData(t, api.Data, &created)
+		return created.ID
+	}
+	remove := func(path string) {
+		t.Helper()
+		code, api := l.call(http.MethodDelete, path, nil, l.adminToken)
+		require.Equal(t, http.StatusOK, code, api.Error)
+	}
+
+	category := map[string]interface{}{"name": "Seasonal", "description": ""}
+	categoryID := create("/api/v1/categories", category, l.adminToken)
+	product := map[string]interface{}{"name": "Lantern", "sku": "SEASON-1", "price": 10, "category_id": categoryID}
+	remove(fmt.Sprintf("/api/v1/products/%s", create("/api/v1/products", product, l.adminToken)))
+	remove(fmt.Sprintf("/api/v1/categories/%s", categoryID))
+
+	categoryID = create("/api/v1/categories", category, l.adminToken)
+	product["category_id"] = categoryID
+	create("/api/v1/products", product, l.adminToken)
+
+	code, _ := l.call(http.MethodPost, "/api/v1/categories", category, l.adminToken)
+	assert.Equal(t, http.StatusConflict, code, "live names stay unique")
+	code, _ = l.call(http.MethodPost, "/api/v1/products", product, l.adminToken)
+	assert.Equal(t, http.StatusConflict, code, "live SKUs stay unique")
+
+	user := map[string]interface{}{"first_name": "Again", "email": "again@example.com", "password": "password123"}
+	remove(fmt.Sprintf("/api/v1/users/%s", create("/api/v1/users", user, "")))
+	create("/api/v1/users", user, "")
+}
