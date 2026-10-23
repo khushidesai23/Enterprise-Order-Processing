@@ -1,4 +1,4 @@
-.PHONY: run build test test-db swagger fmt tidy docker-up docker-down logs clean promote-admin
+.PHONY: run build test test-db swagger fmt tidy docker-up docker-down logs clean promote-admin \n	frontend-install frontend-dev frontend-build frontend-test frontend-e2e seed
 
 run:
 	go run ./cmd/server
@@ -43,3 +43,26 @@ promote-admin:
 
 clean:
 	rm -rf bin
+
+# Frontend (frontend/): storefront at /shop, admin console at /admin.
+# The dev server proxies /api to the API on :8080 (API_PROXY_TARGET).
+frontend-install:
+	cd frontend && npm ci
+
+frontend-dev:
+	cd frontend && npm run dev
+
+frontend-build:
+	cd frontend && npm run build
+
+frontend-test:
+	cd frontend && npm run typecheck && npm test
+
+# Browser end-to-end tests against the running API (make run) and a
+# promoted admin (ADMIN_EMAIL / ADMIN_PASSWORD, default admin@meridian.test).
+frontend-e2e:
+	cd frontend && npx playwright test
+
+# Demo catalogue and customer through the API, as an admin.
+seed:
+	cd frontend && npm run seed
