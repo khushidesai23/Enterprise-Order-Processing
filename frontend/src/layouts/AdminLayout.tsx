@@ -56,7 +56,9 @@ export function AdminLayout() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
 
-  useEffect(() => setOpen(false), [location.pathname]);
+  useEffect(() => {
+    setOpen(false);
+  }, [location.pathname]);
 
   return (
     <div className="min-h-screen bg-background">

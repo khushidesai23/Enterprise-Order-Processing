@@ -57,7 +57,11 @@ export function StoreLayout() {
   const { count } = useCart();
   const location = useLocation();
 
-  useEffect(() => window.scrollTo(0, 0), [location.pathname]);
+  // Braces matter: newer browsers return a Promise from scrollTo, which
+  // React would otherwise call as the effect cleanup.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   const navClass = ({ isActive }: { isActive: boolean }) =>
     cn(
