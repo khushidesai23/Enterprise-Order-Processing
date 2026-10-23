@@ -28,20 +28,41 @@ its own origin and no CORS setup is needed. Point it at another API with
 `API_PROXY_TARGET` (see `.env.example`), for example
 `$env:API_PROXY_TARGET = "http://localhost:8081"; npm run dev`.
 
-### First admin and demo data
+### Demo data and the first admin
 
-Registration always creates customers. To get an admin and a demo
-catalogue:
+Fill the database with a large demo store, from the repository root:
 
 ```powershell
-# 1. Register in the storefront (or POST /api/v1/users), then promote:
+go run ./cmd/seed      # or: make seed
+```
+
+| Seeded | Amount |
+|---|---|
+| Departments | 24 |
+| Products | ~840 listings with photos, brands, MRP and specs: the [DummyJSON](https://dummyjson.com) catalogue (`cmd/seed/data/products.json`) expanded into colour, storage and pack variants |
+| Stock | Every product, about 6% sold out and 10% low |
+| Customers | 1,500 (`*@shopper.example.com`, password `password123`) |
+| Orders | 25,000 over the past year, in every status, with matching payments and stock reservations |
+| Reviews | ~11,700, most from verified purchases |
+
+The seeder is deterministic and safe to re-run: products and customers are
+matched by SKU and email, and orders and reviews are only generated once
+(`-force-orders` adds more). Scale it with flags, for example
+`go run ./cmd/seed -customers 5000 -orders 100000`.
+
+Seeded payments are written straight to the database, so refunding one in
+the admin console fails at Razorpay (its payment IDs are fake). Real
+payments made through checkout refund normally.
+
+Product photos load from DummyJSON's CDN. Offline, products fall back to
+generated tiles.
+
+Registration always creates customers. To get an admin, register in the
+storefront, then promote the account:
+
+```powershell
 make promote-admin EMAIL=admin@meridian.test
 #    (or: UPDATE users SET role = 'admin' WHERE email = '...')
-
-# 2. Seed categories, products with stock, and a demo customer
-#    (customer@meridian.test / customer123). Safe to re-run.
-$env:ADMIN_EMAIL = "admin@meridian.test"; $env:ADMIN_PASSWORD = "..."
-npm run seed           # API_URL defaults to http://localhost:8080
 ```
 
 Sign out and back in after a role change: the role travels in the JWT.
@@ -61,10 +82,22 @@ with a fallback to `index.html` for client-side routes.
 
 **Storefront**
 
-- Catalogue with category chips (`GET /products/category/:id`), search by
-  name/SKU/category, price range, in-stock filter and sorting.
-- Product pages with live stock, low-stock and sold-out badges.
-- Cart stored in the browser, checked against live stock before checkout.
+- Header with department-scoped search, account and orders menus,
+  wishlist and cart, a department bar and an "All" departments drawer.
+- Home page: rotating banners, department cards, and rails for today's
+  deals, best sellers, top rated, new arrivals and your browsing history.
+- Search (`GET /products/search`): word search; department, brand,
+  customer-rating, price, deals and in-stock filters with counts; nine sort
+  orders; numbered pages. Filters live in the URL, so results can be
+  bookmarked and shared.
+- Product pages: image gallery, brand store link, rating, price with MRP
+  and discount, highlights and full specs, delivery promise, buy box with
+  quantity, Add to Cart and Buy Now, related products, more from the brand.
+- Reviews: rating summary and histogram (click a bar to filter), sorting
+  and pages, and writing, editing or deleting your own review. Reviews from
+  customers who bought the product are marked **Verified Purchase**.
+- Wishlist and "save for later", stored in the browser.
+- Cart checked against live stock and prices before checkout.
 - Sign-up and sign-in. An expired session returns you to the page you were
   on after signing in again.
 - Checkout: `POST /orders` reserves the stock, `POST /payments` creates the
@@ -80,8 +113,8 @@ with a fallback to `index.html` for client-side routes.
 - Overview: revenue, order, low-stock and customer KPIs, a 14-day captured
   revenue chart, orders by status (from `GET /orders/summary`), recent
   orders and low-stock warnings.
-- Products: create (with starting stock), edit and delete, with search and
-  a category filter.
+- Products: create (with starting stock), edit and delete, including
+  brand, MRP and images; server-side search, category filter and pages.
 - Categories: create, edit, delete (blocked while a category has products).
 - Inventory: add and remove stock, set exact levels, reserve, release and
   confirm reservations, low and out-of-stock filters, and a "start
@@ -91,6 +124,8 @@ with a fallback to `index.html` for client-side routes.
   unpaid orders, and refunds (before shipment a refund also cancels the
   order).
 - Payments: summary, status filter, search and refunds.
+- Reviews: all reviews newest first, filter by stars, delete (the
+  product's rating is recalculated).
 - Customers: search, role filter, grant or remove admin, deactivate or
   reactivate, and delete. Admins cannot act on their own account.
 
@@ -119,9 +154,10 @@ npm run test:e2e       # Playwright browser tests (first time: npx playwright in
 ```
 
 The Playwright suite drives the real UI against the real API and database:
-registration, browsing and filters, cart, checkout, payment, retry and
-cancellation, the admin catalogue, inventory operations, fulfilment,
-refunds, customer management and access control. It needs:
+the home page, search filters and sorting, registration, cart, checkout,
+payment, retry and cancellation, verified reviews, the wishlist, the admin
+catalogue, inventory operations, fulfilment, refunds, review moderation,
+customer management and access control. It needs:
 
 - the API running with its `.env` (the suite reads `RAZORPAY_KEY_SECRET`
   from `../.env`, or from the environment);

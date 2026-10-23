@@ -116,6 +116,7 @@ TanStack Query, Recharts, Playwright.
 
 ```text
 cmd/server/            entry point (config, telemetry, DB, CDC consumer, HTTP server, graceful shutdown)
+cmd/seed/              demo-store seeder (DummyJSON catalogue, customers, orders, reviews)
 config/                config.go, prometheus.yml, collector-config.yaml,
                        debezium/ (connector + setup.sql), grafana/ (provisioning + dashboard)
 docs/                  generated Swagger
@@ -125,7 +126,7 @@ internal/app/          router and dependency wiring
 internal/database/     connection pool, migrations, health
 internal/messaging/    Kafka CDC consumer
 internal/models/       GORM models
-internal/modules/      auth, user, category, product, inventory, order, payment
+internal/modules/      auth, user, category, product, inventory, order, payment, review
 internal/repository/   data access
 internal/test/         e2e/, integration/ (DB fixtures and harness), mocks/
 locust/                seed.py, scenarios/, requirements.txt
@@ -159,8 +160,10 @@ Frontend (storefront at http://localhost:5173/shop, admin console at
 cd frontend; npm install; npm run dev
 ```
 
-Create the first admin with `make promote-admin EMAIL=...` and load a demo
-catalogue with `npm run seed`; see [frontend/README.md](frontend/README.md).
+Load a large demo store (about 840 products with photos, 1,500 customers,
+25,000 orders and 11,700 reviews) with `go run ./cmd/seed`, and create the
+first admin with `make promote-admin EMAIL=...`; see
+[frontend/README.md](frontend/README.md).
 
 On Linux/macOS the same steps work with `cp`, `cat ... |` and `curl`; a
 `Makefile` wraps the common commands (`make run`, `make test`, `make test-db`,
@@ -206,7 +209,8 @@ category/product reads, health and the payment webhook, require
 | Health | `GET /health`, `/ready` (checks DB), `/ping`, `/version` |
 | Auth | `POST /auth/login`, `GET /auth/me` |
 | Users | `POST /users` (sign-up), `GET/PUT/DELETE /users/:id`, `GET /users`, `PATCH /users/:id/role` |
-| Catalog | `/categories`, `/products` (`GET /products/category/:categoryId`) |
+| Catalog | `/categories`, `/products` (`GET /products/category/:categoryId`), `GET /products/search` (words, category, brands, price, rating, stock and deals filters; sorting; paging; facets) |
+| Reviews | `GET /products/:id/reviews` (public, with rating histogram), `GET /products/:id/reviews/me`, `PUT /products/:id/reviews` (one per customer, verified when purchased), `DELETE /reviews/:id` (author or admin), `GET /reviews` (admin) |
 | Inventory | `/inventory`, `/inventory/:productId` + `add-stock`, `remove-stock`, `reserve`, `release`, `confirm` |
 | Orders | `POST /orders`, `GET /orders?page=&limit=&status=` (limit <= 100; `status` filters for admins), `GET /orders/summary` (admin: counts per status), `GET /orders/me`, `GET /orders/:id`, `PATCH /orders/:id/status`, `PATCH /orders/:id/cancel` |
 | Payments | `POST /payments`, `POST /payments/verify`, `GET /payments`, `/payments/summary`, `/payments/:id`, `/payments/order/:orderId`, `POST /payments/:id/refund`, `POST /payments/webhook` |
