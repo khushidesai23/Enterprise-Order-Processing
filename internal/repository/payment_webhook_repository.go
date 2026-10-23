@@ -65,6 +65,28 @@ func (r *PaymentWebhookRepository) GetByPayloadID(
 	return &webhook, nil
 }
 
+// MarkFailed marks a webhook that can never be applied (for example, one for a gateway order this system did not create).
+func (r *PaymentWebhookRepository) MarkFailed(
+	ctx context.Context,
+	tx *gorm.DB,
+	payloadID string,
+	processedAt time.Time,
+) error {
+
+	return tx.
+		WithContext(ctx).
+		Model(&models.PaymentWebhook{}).
+		Where(
+			"payload_id = ?",
+			payloadID,
+		).
+		Updates(map[string]interface{}{
+			"status":       models.WebhookFailed,
+			"processed_at": processedAt,
+		}).
+		Error
+}
+
 // MarkProcessed marks a webhook as successfully processed.
 func (r *PaymentWebhookRepository) MarkProcessed(
 	ctx context.Context,

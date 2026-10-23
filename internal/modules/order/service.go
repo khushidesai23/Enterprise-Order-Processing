@@ -386,6 +386,12 @@ func (s *Service) UpdateOrderStatus(
 	req UpdateOrderStatusRequest,
 ) (*OrderResponse, error) {
 
+	// Only a captured payment may mark an order paid.
+	if req.Status == models.OrderPaymentPending ||
+		req.Status == models.OrderPaid {
+		return nil, ErrStatusSetByPayment
+	}
+
 	tx := s.orderRepository.Begin(ctx)
 
 	if tx.Error != nil {
@@ -410,13 +416,15 @@ func (s *Service) UpdateOrderStatus(
 		return nil, err
 	}
 
-	if err := s.transitionOrder(
-		ctx,
-		tx,
-		order,
-		req.Status,
-	); err != nil {
+	if req.Status == models.OrderCancelled {
+		// Cancelling must release reserved stock, which a plain status
+		// change would not.
+		err = s.cancelUnpaidOrderTx(ctx, tx, order)
+	} else {
+		err = s.transitionOrder(ctx, tx, order, req.Status)
+	}
 
+	if err != nil {
 		tx.Rollback()
 		return nil, err
 	}
@@ -503,37 +511,9 @@ func (s *Service) MarkOrderPaid(
 	)
 }
 
-// CancelOrderByPaymentFailure cancels an order and releases
-// reserved inventory.
-func (s *Service) CancelOrderByPaymentFailure(
-	tx *gorm.DB,
-	orderID uuid.UUID,
-) error {
-
-	ctx := tx.Statement.Context
-
-	order, err := s.orderRepository.GetByIDTx(
-		ctx,
-		tx,
-		orderID,
-	)
-	if err != nil {
-
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrOrderNotFound
-		}
-
-		return err
-	}
-
-	return s.cancelOrderTx(
-		ctx,
-		tx,
-		order,
-	)
-}
-
-// RefundOrder owns order-side behavior for a refunded payment.
+// RefundOrder owns order-side behavior for a refunded payment: an order that
+// has not shipped is cancelled and its reserved stock released. Shipped and
+// delivered orders keep their status, since the stock has already left.
 func (s *Service) RefundOrder(
 	tx *gorm.DB,
 	orderID uuid.UUID,
@@ -555,11 +535,10 @@ func (s *Service) RefundOrder(
 		return err
 	}
 
-	if order.Status == models.OrderDelivered {
-		return nil
-	}
-
-	if order.Status == models.OrderCancelled {
+	switch order.Status {
+	case models.OrderShipped,
+		models.OrderDelivered,
+		models.OrderCancelled:
 		return nil
 	}
 
@@ -601,8 +580,9 @@ func (s *Service) ConfirmShipment(
 	)
 }
 
-// CancelOrder cancels an order and releases any reserved inventory.
-// Customers may cancel only their own orders.
+// CancelOrder cancels an unpaid order and releases its reserved inventory.
+// Customers may cancel only their own orders. Paid orders are cancelled by
+// refunding their payment, which returns the money as well.
 func (s *Service) CancelOrder(
 	ctx context.Context,
 	id uuid.UUID,
@@ -638,7 +618,7 @@ func (s *Service) CancelOrder(
 		return nil, ErrOrderNotFound
 	}
 
-	if err := s.cancelOrderTx(
+	if err := s.cancelUnpaidOrderTx(
 		ctx,
 		tx,
 		order,
@@ -710,6 +690,23 @@ func (s *Service) transitionOrder(
 	)
 
 	return nil
+}
+
+// cancelUnpaidOrderTx is cancellation on request (customer or admin).
+// Cancelling a paid order here would keep the customer's money, so it is
+// refused; the refund flow cancels paid orders.
+func (s *Service) cancelUnpaidOrderTx(
+	ctx context.Context,
+	tx *gorm.DB,
+	order *models.Order,
+) error {
+
+	switch order.Status {
+	case models.OrderPaid, models.OrderPacked:
+		return ErrOrderRefundRequired
+	}
+
+	return s.cancelOrderTx(ctx, tx, order)
 }
 
 func (s *Service) cancelOrderTx(

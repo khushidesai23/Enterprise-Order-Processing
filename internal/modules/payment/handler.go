@@ -25,7 +25,7 @@ func NewHandler(
 
 // POST /payments
 // @Summary Create Payment
-// @Description Create a new payment for an order
+// @Description Start checkout for an order, or resume it: an order whose last attempt failed gets the same Razorpay order back to retry
 // @Tags Payments
 // @Security BearerAuth
 // @Accept json
@@ -63,7 +63,9 @@ func (h *Handler) CreatePayment(c *gin.Context) {
 
 		case errors.Is(err, ErrOrderAlreadyPaid),
 			errors.Is(err, ErrOrderCancelled),
-			errors.Is(err, ErrPaymentAlreadyCompleted):
+			errors.Is(err, ErrOrderNotEligibleForPayment),
+			errors.Is(err, ErrPaymentAlreadyCompleted),
+			errors.Is(err, ErrInvalidPaymentStatus):
 
 			response.Error(c, http.StatusBadRequest, err.Error())
 			return
@@ -274,7 +276,7 @@ func (h *Handler) ProcessWebhook(c *gin.Context) {
 
 // POST /payments/:id/refund
 // @Summary Refund Payment
-// @Description Refund a payment by ID (admin only)
+// @Description Refund a captured payment in full through Razorpay (admin only). Cancels the order and releases stock if it has not shipped.
 // @Tags Payments
 // @Security BearerAuth
 // @Accept json
@@ -285,6 +287,7 @@ func (h *Handler) ProcessWebhook(c *gin.Context) {
 // @Failure 403 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
 // @Failure 500 {object} response.APIResponse
+// @Failure 502 {object} response.APIResponse
 // @Router /payments/{id}/refund [post]
 func (h *Handler) RefundPayment(c *gin.Context) {
 
@@ -303,9 +306,14 @@ func (h *Handler) RefundPayment(c *gin.Context) {
 			return
 
 		case errors.Is(err, ErrInvalidPaymentStatus),
-			errors.Is(err, ErrPaymentNotPending):
+			errors.Is(err, ErrPaymentNotRefundable),
+			errors.Is(err, ErrOrderNotEligibleForPayment):
 
 			response.Error(c, http.StatusBadRequest, err.Error())
+			return
+
+		case errors.Is(err, ErrGatewayRefund):
+			response.Error(c, http.StatusBadGateway, err.Error())
 			return
 
 		default:

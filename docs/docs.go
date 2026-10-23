@@ -1030,7 +1030,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Cancel an order by ID (own orders only, unless admin)",
+                "description": "Cancel an unpaid order and release its stock (own orders only, unless admin). Paid orders are cancelled by refunding the payment.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1079,7 +1079,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Update the status of an order by ID (admin only)",
+                "description": "Move an order through fulfilment (PACKED, SHIPPED, DELIVERED) or cancel an unpaid one (admin only). PAYMENT_PENDING and PAID are set by the payment flow.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1181,7 +1181,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Create a new payment for an order",
+                "description": "Start checkout for an order, or resume it: an order whose last attempt failed gets the same Razorpay order back to retry",
                 "consumes": [
                     "application/json"
                 ],
@@ -1422,7 +1422,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Refund a payment by ID (admin only)",
+                "description": "Refund a captured payment in full through Razorpay (admin only). Cancels the order and releases stock if it has not shipped.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1469,6 +1469,12 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
                         "schema": {
                             "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
                         }

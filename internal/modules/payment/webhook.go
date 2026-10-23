@@ -41,6 +41,8 @@ type RazorpayPaymentEntity struct {
 	Description string `json:"description"`
 	Email       string `json:"email"`
 	Contact     string `json:"contact"`
+	// null, "partial" or "full"
+	RefundStatus *string `json:"refund_status"`
 }
 
 // Parse Webhook
@@ -78,6 +80,16 @@ func (w *RazorpayWebhook) PaymentStatus() (models.PaymentStatus, error) {
 	default:
 		return "", ErrUnknownWebhookEvent
 	}
+}
+
+// IsPartialRefund reports a refund event that returned only part of the
+// payment. Only full refunds are modelled, so these are not applied.
+func (w *RazorpayWebhook) IsPartialRefund() bool {
+	refundStatus := w.Payload.Payment.Entity.RefundStatus
+
+	return w.Event == "refund.created" &&
+		refundStatus != nil &&
+		*refundStatus == "partial"
 }
 
 // Helper Getters

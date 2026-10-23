@@ -259,7 +259,7 @@ func parseOrderPage(c *gin.Context) (int, int, bool) {
 
 // PATCH /orders/:id/status
 // @Summary Update Order Status
-// @Description Update the status of an order by ID (admin only)
+// @Description Move an order through fulfilment (PACKED, SHIPPED, DELIVERED) or cancel an unpaid one (admin only). PAYMENT_PENDING and PAID are set by the payment flow.
 // @Tags Orders
 // @Security BearerAuth
 // @Accept json
@@ -300,8 +300,13 @@ func (h *Handler) UpdateOrderStatus(c *gin.Context) {
 			return
 
 		case errors.Is(err, ErrInvalidOrderStatus),
+			errors.Is(err, ErrStatusSetByPayment),
 			errors.Is(err, ErrOrderAlreadyCancelled),
-			errors.Is(err, ErrOrderAlreadyCompleted):
+			errors.Is(err, ErrOrderAlreadyCompleted),
+			errors.Is(err, ErrOrderCannotBeCancelled),
+			errors.Is(err, ErrOrderRefundRequired),
+			errors.Is(err, ErrInventoryNotFound),
+			errors.Is(err, ErrInsufficientReserved):
 			response.Error(c, http.StatusBadRequest, err.Error())
 			return
 
@@ -316,7 +321,7 @@ func (h *Handler) UpdateOrderStatus(c *gin.Context) {
 
 // PATCH /orders/:id/cancel
 // @Summary Cancel Order
-// @Description Cancel an order by ID (own orders only, unless admin)
+// @Description Cancel an unpaid order and release its stock (own orders only, unless admin). Paid orders are cancelled by refunding the payment.
 // @Tags Orders
 // @Security BearerAuth
 // @Accept json
@@ -355,6 +360,7 @@ func (h *Handler) CancelOrder(c *gin.Context) {
 		case errors.Is(err, ErrOrderAlreadyCancelled),
 			errors.Is(err, ErrOrderAlreadyCompleted),
 			errors.Is(err, ErrOrderCannotBeCancelled),
+			errors.Is(err, ErrOrderRefundRequired),
 			errors.Is(err, ErrInventoryNotFound),
 			errors.Is(err, ErrInsufficientReserved):
 			response.Error(c, http.StatusBadRequest, err.Error())

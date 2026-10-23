@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/payment"
@@ -18,6 +19,11 @@ type StubPaymentGateway struct {
 	keySecret     string
 	webhookSecret string
 	counter       uint64
+
+	mu      sync.Mutex
+	refunds []payment.GatewayRefundRequest
+	// RefundErr, when set, makes RefundPayment fail like a gateway outage.
+	RefundErr error
 }
 
 func NewStubPaymentGateway(keyID, keySecret, webhookSecret string) *StubPaymentGateway {
@@ -72,6 +78,34 @@ func (g *StubPaymentGateway) VerifyWebhookSignature(
 	)
 
 	return verifier.VerifyWebhookSignature(body, signature)
+}
+
+func (g *StubPaymentGateway) RefundPayment(
+	ctx context.Context,
+	req payment.GatewayRefundRequest,
+) (*payment.GatewayRefundResponse, error) {
+	_ = ctx
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	if g.RefundErr != nil {
+		return nil, g.RefundErr
+	}
+
+	g.refunds = append(g.refunds, req)
+
+	return &payment.GatewayRefundResponse{
+		RefundID: fmt.Sprintf("rfnd_test_%d", len(g.refunds)),
+	}, nil
+}
+
+// Refunds returns the refunds the gateway was asked to make.
+func (g *StubPaymentGateway) Refunds() []payment.GatewayRefundRequest {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	return append([]payment.GatewayRefundRequest(nil), g.refunds...)
 }
 
 func (g *StubPaymentGateway) SignWebhook(body []byte) string {

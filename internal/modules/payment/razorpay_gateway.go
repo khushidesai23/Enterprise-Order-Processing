@@ -46,7 +46,7 @@ func (g *RazorpayGateway) CreateOrder(
 ) (*GatewayOrderResponse, error) {
 
 	// Razorpay expects amount in paise.
-	amount := int(req.Amount * 100)
+	amount := toPaise(req.Amount)
 
 	data := map[string]interface{}{
 		"amount":   amount,
@@ -71,6 +71,36 @@ func (g *RazorpayGateway) CreateOrder(
 		OrderID:  orderID,
 		Amount:   req.Amount,
 		Currency: req.Currency,
+	}, nil
+}
+
+func (g *RazorpayGateway) RefundPayment(
+	ctx context.Context,
+	req GatewayRefundRequest,
+) (*GatewayRefundResponse, error) {
+
+	refund, err := g.client.Payment.Refund(
+		req.TransactionID,
+		toPaise(req.Amount),
+		map[string]interface{}{
+			"receipt": req.Receipt,
+		},
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"razorpay refund failed: %w",
+			err,
+		)
+	}
+
+	refundID, ok := refund["id"].(string)
+	if !ok {
+		return nil, fmt.Errorf("gateway returned invalid refund id")
+	}
+
+	return &GatewayRefundResponse{
+		RefundID: refundID,
 	}, nil
 }
 

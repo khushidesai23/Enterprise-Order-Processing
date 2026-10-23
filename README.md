@@ -62,10 +62,15 @@ module can later be extracted without changing callers.
 - **Status changes** (cancel, payment, shipping, refund) lock the order row
   (`SELECT ... FOR UPDATE OF orders`), so concurrent transitions are
   serialized and reserved stock is released or confirmed exactly once.
+- **Payment changes** (checkout, webhooks, refunds) lock the payment's
+  order row first and re-read the payment under that lock, so every path
+  takes locks in the same order and none can deadlock another.
 - **Webhooks** are deduplicated on the Razorpay event ID (unique
-  `payment_webhooks.payload_id`), and the payment row is locked while its
-  status is applied. A failed application rolls back the webhook record so
-  the gateway's retry is processed again.
+  `payment_webhooks.payload_id`), including concurrent redeliveries. A
+  failed application rolls back the webhook record so the gateway's retry
+  is processed again. Events are also safe to apply out of order: a
+  payment never moves backwards (a late `payment.failed` cannot undo a
+  capture, a capture cannot undo a refund).
 - **Request deadline**: every request context has a 10 s deadline (below the
   15 s server write timeout). Stalled queries are cancelled and the client
   receives `504` instead of a silently dropped connection.
@@ -78,8 +83,23 @@ CREATED -> PAYMENT_PENDING -> PAID -> PACKED -> SHIPPED -> DELIVERED
    +-------------+-------------+--> CANCELLED (releases reserved stock)
 ```
 
-Shipping confirms (consumes) the reserved stock. `payment.failed` cancels the
-order; refunds cancel non-delivered orders.
+Shipping confirms (consumes) the reserved stock.
+
+| Event | Payment | Order | Stock |
+|---|---|---|---|
+| `POST /payments` | `PENDING` (Razorpay order created) | `PAYMENT_PENDING` | stays reserved |
+| `payment.failed` | `FAILED` | stays `PAYMENT_PENDING` | stays reserved |
+| `POST /payments` again (retry) | back to `PENDING`, same Razorpay order | unchanged | stays reserved |
+| `payment.captured` | `SUCCESS` | `PAID` | stays reserved |
+| Cancel (`PATCH /orders/:id/cancel`, or status `CANCELLED`) before payment | unchanged | `CANCELLED` | released |
+| Cancel a `PAID`/`PACKED` order | refused: refund it instead | | |
+| Refund (`POST /payments/:id/refund`, admin) before shipping | `REFUNDED` (Razorpay refund issued) | `CANCELLED` | released |
+| Refund after shipping | `REFUNDED` | keeps `SHIPPED`/`DELIVERED` | already consumed |
+| `refund.created` (e.g. from the Razorpay dashboard) | same as a refund | same as a refund | same as a refund |
+
+`PAYMENT_PENDING` and `PAID` are set only by the payment flow; the admin
+status endpoint handles fulfilment (`PACKED`, `SHIPPED`, `DELIVERED`) and
+cancellation of unpaid orders.
 
 ## Technology
 
@@ -212,8 +232,17 @@ at the user's next login.
 order, `POST /payments`, open the page and pay. Razorpay cannot reach
 `localhost`, so expose the API (`ngrok http 8080`) and configure the webhook
 URL `https://<ngrok-domain>/api/v1/payments/webhook`. Webhooks must carry
-`X-Razorpay-Signature` (verified) and `X-Razorpay-Event-Id` (dedupe key;
-missing -> 400).
+`X-Razorpay-Signature` (verified; bad -> 401) and `X-Razorpay-Event-Id`
+(dedupe key; missing -> 400). Subscribe to `payment.captured`,
+`payment.failed` and `refund.created`. Any other event, a partial refund,
+or an event for a Razorpay order this API did not create is acknowledged
+with 200 and not applied, so Razorpay does not retry it or disable the
+webhook; the last case is stored with status `FAILED` for inspection.
+
+If a customer cancels an order and then completes the Razorpay checkout
+anyway, the capture is recorded (payment `SUCCESS`, order still
+`CANCELLED`) and logged as `payment captured for cancelled order; refund
+required`; refund it with `POST /payments/:id/refund`.
 
 ## Observability
 
@@ -284,8 +313,11 @@ $env:LOCUST_ADMIN_EMAIL = "admin@example.com"; $env:LOCUST_ADMIN_PASSWORD = "...
   database, so a demoted, deactivated or deleted user keeps their access
   until the token expires (`JWT_EXPIRATION`, 24h by default). Keep the
   expiry short or add token revocation before relying on demotion.
-- A failed payment (`payment.failed`) cancels the order, so a later
-  successful retry on the same Razorpay order cannot mark it paid.
+- Only full refunds are modelled. Partial refunds (from the Razorpay
+  dashboard) are acknowledged but not recorded, and `refund.failed` is not
+  handled: a refund that Razorpay later fails must be followed up manually.
+- A capture on an order cancelled while payment was in flight is not
+  refunded automatically; it is logged for an admin to refund.
 - `BaseModel.BeforeCreate` always assigns a new UUID, so creating a record
   with a populated association re-IDs that association.
 - The CDC consumer has no business logic yet.
