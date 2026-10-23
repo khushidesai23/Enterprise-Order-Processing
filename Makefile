@@ -63,6 +63,8 @@ frontend-test:
 frontend-e2e:
 	cd frontend && npx playwright test
 
-# Demo catalogue and customer through the API, as an admin.
+# Large demo store: ~840 products with images in 24 departments, 1,500
+# customers, 25,000 orders with payments over a year, ~11,000 reviews.
+# Safe to re-run. Scale with ARGS, e.g. make seed ARGS="-orders 100000".
 seed:
-	cd frontend && npm run seed
+	go run ./cmd/seed $(ARGS)
