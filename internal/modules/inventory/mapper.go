@@ -42,7 +42,7 @@ func ToInventoryListResponse(
 	}
 
 	// Product information (requires Preload("Product"))
-	if inventory.Product.ID != inventory.ProductID {
+	if inventory.Product.ID == inventory.ProductID {
 		response.ProductName = inventory.Product.Name
 		response.SKU = inventory.Product.SKU
 	}
