@@ -536,7 +536,9 @@ function Footer() {
         </div>
       </div>
       <div className="mx-auto max-w-[1600px] px-5 sm:px-8">
-        <p className="select-none font-display text-[clamp(4rem,19vw,19rem)] font-extrabold leading-[0.8] tracking-[-0.06em] text-bone">
+        {/* "meridian/" in Syne ExtraBold is about 8.5em wide, so the size
+            follows the container width (1600px max, minus padding). */}
+        <p aria-hidden className="select-none whitespace-nowrap font-display text-[min(11.8vw,12.8rem)] font-extrabold leading-[0.85] tracking-[-0.06em] text-bone">
           meridian<span className="text-acid">/</span>
         </p>
       </div>
@@ -582,7 +584,9 @@ export function StoreShell() {
 
   return (
     <BagProvider>
-      <div className="store grain flex min-h-screen flex-col">
+      {/* overflow-x-clip (not hidden) trims the tilted marquee band without
+          breaking sticky positioning. */}
+      <div className="store grain flex min-h-screen flex-col overflow-x-clip">
         <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-full focus:bg-ink focus:px-4 focus:py-2 focus:text-bone">
           Skip to content
         </a>
