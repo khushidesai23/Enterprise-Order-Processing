@@ -1,4 +1,4 @@
-# Meridian Market: storefront and admin console
+# meridian/: storefront and admin console
 
 React frontend for the Enterprise Order Processing API. It is one app with
 two areas:
@@ -8,7 +8,7 @@ two areas:
 | Storefront | `/shop` | Anyone. Signed-in customers can check out, pay and track orders. |
 | Admin console | `/admin` | Users with the `admin` role. |
 
-Stack: React 18, TypeScript, Vite 6, Tailwind CSS 4, Radix UI primitives
+Stack: React 18, TypeScript, Vite 6, Tailwind CSS 4, Motion for React, Radix UI primitives
 (shadcn-style components in `src/components/ui`), React Router 6, TanStack
 Query 5, Recharts, Vitest and Playwright.
 
@@ -80,33 +80,69 @@ with a fallback to `index.html` for client-side routes.
 
 ## Features
 
-**Storefront**
+**Storefront: meridian/**
 
-- Header with department-scoped search, account and orders menus,
-  wishlist and cart, a department bar and an "All" departments drawer.
-- Home page: rotating banners, department cards, and rails for today's
-  deals, best sellers, top rated, new arrivals and your browsing history.
-- Search (`GET /products/search`): word search; department, brand,
-  customer-rating, price, deals and in-stock filters with counts; nine sort
-  orders; numbered pages. Filters live in the URL, so results can be
-  bookmarked and shared.
-- Product pages: image gallery, brand store link, rating, price with MRP
-  and discount, highlights and full specs, delivery promise, buy box with
-  quantity, Add to Cart and Buy Now, related products, more from the brand.
-- Reviews: rating summary and histogram (click a bar to filter), sorting
-  and pages, and writing, editing or deleting your own review. Reviews from
-  customers who bought the product are marked **Verified Purchase**.
-- Wishlist and "save for later", stored in the browser.
-- Cart checked against live stock and prices before checkout.
-- Sign-up and sign-in. An expired session returns you to the page you were
-  on after signing in again.
-- Checkout: `POST /orders` reserves the stock, `POST /payments` creates the
-  Razorpay order, Razorpay Checkout takes the payment, and
-  `POST /payments/verify` confirms it.
-- Orders: history with pagination, a status timeline, payment details,
-  **Pay now / Retry payment** for unpaid orders, and **Cancel order**
-  (releases the stock).
-- Account page to edit your name.
+The storefront has its own identity, separate from the admin console: a
+neo-editorial "index of objects".
+
+- **Visual language.** Warm bone paper, deep ink, an acid-lime signal
+  colour and an ultraviolet accent. Type is Syne (display), Instrument
+  Serif italics (editorial accents), Geist (text) and Geist Mono (data
+  such as SKUs, prices and counts). The identity is a globe-and-meridian
+  mark with a slashed wordmark.
+- **Code.** Tokens live in `src/index.css` (`--color-bone`, `--color-ink`,
+  `--color-acid`, ... and `--font-display`, ...). The store's own
+  components are in `src/store/` (shell, tiles, bag, rails, order
+  tracking, motion primitives).
+- **Motion.** Built with [Motion for React](https://motion.dev):
+  - masked word reveals and staggered entrances
+  - a CSS 3D orbit of each department's best seller that tilts with the
+    pointer
+  - a horizontal "most wanted" gallery driven by vertical scroll
+  - magnetic buttons, image zoom and crossfading galleries
+  - a fly-to-bag animation, animated order tracking, and page fades
+  - a cursor-following preview in the departments index
+
+  Everything respects `prefers-reduced-motion` (`MotionConfig
+  reducedMotion="user"` plus CSS fallbacks). There is no Three.js: CSS 3D
+  covers the orbit without adding hundreds of kilobytes.
+
+Pages and features, all on live API data:
+
+- **Home:** live catalogue counts, a hero orbit, today's drops (biggest
+  real discounts), a promise marquee, a department index with live
+  counts, most wanted (each department's best seller by units sold), quotes
+  from real reviews, and new arrivals.
+- **Search:** a command palette (⌘K, Ctrl+K or `/`) with live results.
+- **The index** (`/shop/search`, `GET /products/search`): word search;
+  department, brand, rating, price, drops and in-stock filters with counts;
+  sorting; pages. Filters live in the URL. On phones they open in a bottom
+  sheet.
+- **Product pages:**
+  - a pointer-zoom gallery
+  - real variant options: sibling listings such as storage, colour or
+    pack, each with live stock
+  - a live stock meter, a quantity stepper, Add to bag and Buy now
+  - delivery, returns and warranty, plus collapsible details and specs
+  - related rails and reviews
+- **Reviews:** rating histogram filter, sorting and pages, and write, edit
+  or delete your own review. Buyers' reviews are marked **Verified
+  Purchase**.
+- **Bag:** a slide-in drawer and a full bag page, both checked against
+  live stock and price. Save for later moves items to the wishlist.
+- **Wishlist and recently viewed:** stored in the browser.
+- **Checkout:** `POST /orders` reserves the stock, `POST /payments` opens
+  Razorpay, and `POST /payments/verify` confirms it. The UI says "It's
+  yours" only after the backend reports the order `PAID`. Duplicate
+  submissions are blocked while a request is in flight.
+- **Orders:** history with lifecycle dots, plus an order page with an
+  animated tracker (placed, paid, packed, shipped, delivered), payment
+  details, and **Pay now / Retry payment** and **Cancel order** for unpaid
+  orders.
+- **Account:** sign-up, sign-in and the account page. An expired session
+  returns you to the page you were on after signing in again.
+- **Footer:** a live API and database health indicator
+  (`GET /api/v1/health`).
 
 **Admin console**
 

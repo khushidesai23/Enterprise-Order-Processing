@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
+import { MotionConfig } from "motion/react";
 import { ApiError } from "./lib/api";
 import { AuthProvider } from "./lib/auth";
 import { CartProvider } from "./lib/cart";
@@ -23,17 +24,28 @@ const queryClient = new QueryClient({
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
+    <MotionConfig reducedMotion="user">
     <QueryClientProvider client={queryClient}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AuthProvider>
           <CartProvider>
             <WishlistProvider>
               <App />
-              <Toaster position="top-right" richColors closeButton />
+              <Toaster
+                position="bottom-center"
+                toastOptions={{
+                  classNames: {
+                    toast: "!rounded-2xl !border-0 !bg-[#0c0c0d] !text-[#f2efe8] !shadow-2xl !font-[Geist,Inter,sans-serif]",
+                    description: "!text-[#f2efe8]/60",
+                    error: "!bg-[#ff5a1f] !text-white",
+                  },
+                }}
+              />
             </WishlistProvider>
           </CartProvider>
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>
+    </MotionConfig>
   </StrictMode>,
 );

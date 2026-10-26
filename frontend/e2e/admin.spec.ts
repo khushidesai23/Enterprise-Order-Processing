@@ -192,6 +192,7 @@ test.describe("admin console", () => {
     await page.getByRole("button", { name: "Account menu" }).click();
     await page.getByRole("menuitem", { name: "Sign out" }).click();
     await signIn(page, customer.email, customer.password);
+    await expect(page).toHaveURL(/\/shop$/);
     await page.goto(`/shop/orders/${orderId}`);
     await expect(page.getByText("Delivered").first()).toBeVisible();
   });

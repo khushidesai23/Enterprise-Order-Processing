@@ -3,8 +3,8 @@ import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { errorMessage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/primitives";
+import { StoreButton as Button } from "@/store/Field";
+import { StoreField as Field, StoreInput as Input } from "@/store/Field";
 import { AuthShell } from "./AuthShell";
 
 export function LoginPage() {
@@ -36,12 +36,12 @@ export function LoginPage() {
 
   return (
     <AuthShell
-      title="Sign in"
+      title={<>Welcome <span className="font-serif font-normal italic tracking-[-0.02em] text-ultra">back.</span></>}
       subtitle="Track orders, check out faster and manage your account."
       footer={
         <>
           New here?{" "}
-          <Link to="/register" state={location.state} className="font-medium text-primary hover:underline">
+          <Link to="/register" state={location.state} className="font-medium text-ink underline underline-offset-4 hover:text-ultra">
             Create an account
           </Link>
         </>
@@ -49,7 +49,7 @@ export function LoginPage() {
     >
       <form onSubmit={submit} className="space-y-4" noValidate>
         {error && (
-          <div role="alert" className="rounded-lg border border-danger/20 bg-danger-soft px-3 py-2 text-sm text-danger">
+          <div role="alert" className="rounded-2xl border border-signal/30 bg-signal/10 px-4 py-3 text-sm text-signal">
             {error}
           </div>
         )}
