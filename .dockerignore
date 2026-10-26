@@ -1,0 +1,13 @@
+# Only the Go module is needed to build the API image.
+.git
+.github
+.env
+.env.*
+!.env.example
+bin
+frontend
+locust
+payment-demo
+documentation
+*.md
+coverage.out

@@ -9,6 +9,8 @@ reproducible Locust load-test suite.
 Documentation:
 
 - **This README**: architecture, setup, API, observability, testing, roadmap.
+- **[DEPLOYMENT.md](DEPLOYMENT.md)**: deploying with Netlify (frontend),
+  Render (API, Docker) and Neon (PostgreSQL).
 - **[frontend/README.md](frontend/README.md)**: the React storefront (`/shop`)
   and admin console (`/admin`): setup, features, payments and tests.
 - **[LOAD_TESTING.md](LOAD_TESTING.md)**: load-test scenarios, what to watch,
@@ -181,6 +183,8 @@ All settings come from environment variables, optionally loaded from `.env`
 | `KAFKA_CDC_TOPIC` | categories, orders, inventories topics | Comma-separated `order-processing.public.<table>` topics. |
 | `JWT_SECRET`, `RAZORPAY_*` | none | Required; the app refuses to start without them. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `localhost:4317` | OTel Collector. |
+| `OTEL_ENABLED` / `KAFKA_CDC_ENABLED` | `true` / `true` | Set to `false` where no collector or Kafka runs (e.g. hosted deployments). |
+| `CORS_ALLOWED_ORIGINS` | local dev/preview origins | Comma-separated browser origins allowed to call the API; include the deployed frontend URL. |
 
 Never commit `.env`.
 

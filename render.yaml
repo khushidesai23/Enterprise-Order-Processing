@@ -1,0 +1,59 @@
+# Render blueprint for the Go API (see DEPLOYMENT.md). In Render:
+# New -> Blueprint -> pick this repository. Values marked `sync: false`
+# are asked for when the blueprint is applied; nothing secret is stored here.
+services:
+  - type: web
+    name: meridian-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: production
+      # Render routes traffic to port 10000 by default.
+      - key: APP_PORT
+        value: "10000"
+      - key: LOG_LEVEL
+        value: info
+
+      # No Kafka or OpenTelemetry collector in this deployment.
+      - key: KAFKA_CDC_ENABLED
+        value: "false"
+      - key: OTEL_ENABLED
+        value: "false"
+
+      # PostgreSQL (e.g. Neon): use the direct host, not the "-pooler" one.
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: "5432"
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_SSLMODE
+        value: require
+      - key: DB_MAX_OPEN_CONNS
+        value: "10"
+      - key: DB_MAX_IDLE_CONNS
+        value: "5"
+
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRATION
+        value: 24h
+
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+
+      # The Netlify site's URL, e.g. https://meridian-shop.netlify.app
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false

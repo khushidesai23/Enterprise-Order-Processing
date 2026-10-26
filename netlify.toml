@@ -1,0 +1,11 @@
+# Netlify builds and serves the frontend (frontend/); the Go API runs
+# elsewhere (see DEPLOYMENT.md). Set API_ORIGIN in Netlify's environment
+# variables to the API's public URL, e.g. https://meridian-api.onrender.com.
+
+[build]
+  base = "frontend"
+  command = "npm run build && node scripts/netlify-redirects.mjs"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
