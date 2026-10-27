@@ -95,6 +95,8 @@ func ToPaymentListResponse(
 		Currency: payment.Currency,
 
 		Gateway: payment.Gateway,
+
+		CreatedAt: payment.CreatedAt.Format(time.RFC3339),
 	}
 }
 

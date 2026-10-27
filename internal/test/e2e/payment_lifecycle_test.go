@@ -537,3 +537,163 @@ func TestWebhookEdgeCases(t *testing.T) {
 		l.assertState(orderID, models.OrderPaymentPending, checkout.PaymentID, models.PaymentPending, remaining, lifecycleQuantity)
 	})
 }
+
+func (l *lifecycle) verify(token, gatewayOrderID, paymentID, signature string) (int, testintegration.APIResponse) {
+	l.t.Helper()
+
+	return l.call(http.MethodPost, "/api/v1/payments/verify", map[string]interface{}{
+		"razorpay_order_id":   gatewayOrderID,
+		"razorpay_payment_id": paymentID,
+		"razorpay_signature":  signature,
+	}, token)
+}
+
+func TestLifecycleCheckoutVerification(t *testing.T) {
+	l := newLifecycle(t)
+	orderID := l.createOrder()
+	checkout := l.checkout(orderID)
+	signature := l.env.Gateway.SignCheckout(checkout.GatewayOrderID, "pay_checkout")
+
+	t.Run("forged signature is rejected", func(t *testing.T) {
+		code, _ := l.verify(l.customerToken, checkout.GatewayOrderID, "pay_checkout", "forged")
+
+		assert.Equal(t, http.StatusBadRequest, code)
+		l.assertState(orderID, models.OrderPaymentPending, checkout.PaymentID, models.PaymentPending, remaining, lifecycleQuantity)
+	})
+
+	t.Run("another customer cannot verify the payment", func(t *testing.T) {
+		testintegration.CreateUserFixture(t, testintegration.GormCreator(l.env.DB.DB), "Other", "Customer", "life-other@example.com", "password123")
+
+		code, _ := l.verify(l.login("life-other@example.com"), checkout.GatewayOrderID, "pay_checkout", signature)
+
+		assert.Equal(t, http.StatusNotFound, code)
+		l.assertState(orderID, models.OrderPaymentPending, checkout.PaymentID, models.PaymentPending, remaining, lifecycleQuantity)
+	})
+
+	t.Run("valid signature completes the payment", func(t *testing.T) {
+		code, api := l.verify(l.customerToken, checkout.GatewayOrderID, "pay_checkout", signature)
+
+		require.Equal(t, http.StatusOK, code, api.Error)
+		l.assertState(orderID, models.OrderPaid, checkout.PaymentID, models.PaymentSuccess, remaining, lifecycleQuantity)
+		assert.Equal(t, "pay_checkout", l.transactionID(checkout.PaymentID))
+	})
+
+	t.Run("verification and the capture webhook are idempotent", func(t *testing.T) {
+		code, api := l.verify(l.customerToken, checkout.GatewayOrderID, "pay_checkout", signature)
+		require.Equal(t, http.StatusOK, code, api.Error)
+
+		l.webhook("evt_capture_after_verify", "payment.captured", checkout.GatewayOrderID, "pay_checkout")
+		l.assertState(orderID, models.OrderPaid, checkout.PaymentID, models.PaymentSuccess, remaining, lifecycleQuantity)
+	})
+
+	t.Run("verified payment is refundable", func(t *testing.T) {
+		code, api := l.refund(checkout.PaymentID)
+
+		require.Equal(t, http.StatusOK, code, api.Error)
+		l.assertState(orderID, models.OrderCancelled, checkout.PaymentID, models.PaymentRefunded, inStock, 0)
+	})
+}
+
+func TestAdminOrderSummaryAndStatusFilter(t *testing.T) {
+	l := newLifecycle(t)
+	cancelled := l.createOrder()
+	code, api := l.cancel(cancelled)
+	require.Equal(t, http.StatusOK, code, api.Error)
+	open := l.createOrder()
+
+	code, api = l.call(http.MethodGet, "/api/v1/orders/summary", nil, l.adminToken)
+	require.Equal(t, http.StatusOK, code, api.Error)
+	var summary struct {
+		TotalOrders int64                        `json:"total_orders"`
+		ByStatus    map[models.OrderStatus]int64 `json:"by_status"`
+	}
+	testintegration.DecodeData(t, api.Data, &summary)
+	assert.EqualValues(t, 2, summary.TotalOrders)
+	assert.EqualValues(t, 1, summary.ByStatus[models.OrderCancelled])
+	assert.EqualValues(t, 1, summary.ByStatus[models.OrderCreated])
+	assert.Contains(t, summary.ByStatus, models.OrderDelivered, "every status is reported")
+
+	code, _ = l.call(http.MethodGet, "/api/v1/orders/summary", nil, l.customerToken)
+	assert.Equal(t, http.StatusForbidden, code)
+
+	code, api = l.call(http.MethodGet, "/api/v1/orders?status=CREATED", nil, l.adminToken)
+	require.Equal(t, http.StatusOK, code, api.Error)
+	var orders []struct {
+		ID uuid.UUID `json:"id"`
+	}
+	testintegration.DecodeData(t, api.Data, &orders)
+	require.Len(t, orders, 1)
+	assert.Equal(t, open, orders[0].ID)
+
+	code, _ = l.call(http.MethodGet, "/api/v1/orders?status=BOGUS", nil, l.adminToken)
+	assert.Equal(t, http.StatusBadRequest, code)
+}
+
+// Soft-deleted rows must not keep their unique values: a deleted category
+// name, product SKU or user email can be used again.
+func TestDeletedUniqueValuesCanBeReused(t *testing.T) {
+	l := newLifecycle(t)
+
+	create := func(path string, body map[string]interface{}, token string) uuid.UUID {
+		t.Helper()
+		code, api := l.call(http.MethodPost, path, body, token)
+		require.Equal(t, http.StatusCreated, code, api.Error)
+		var created struct {
+			ID uuid.UUID `json:"id"`
+		}
+		testintegration.DecodeData(t, api.Data, &created)
+		return created.ID
+	}
+	remove := func(path string) {
+		t.Helper()
+		code, api := l.call(http.MethodDelete, path, nil, l.adminToken)
+		require.Equal(t, http.StatusOK, code, api.Error)
+	}
+
+	category := map[string]interface{}{"name": "Seasonal", "description": ""}
+	categoryID := create("/api/v1/categories", category, l.adminToken)
+	product := map[string]interface{}{"name": "Lantern", "sku": "SEASON-1", "price": 10, "category_id": categoryID}
+	remove(fmt.Sprintf("/api/v1/products/%s", create("/api/v1/products", product, l.adminToken)))
+	remove(fmt.Sprintf("/api/v1/categories/%s", categoryID))
+
+	categoryID = create("/api/v1/categories", category, l.adminToken)
+	product["category_id"] = categoryID
+	create("/api/v1/products", product, l.adminToken)
+
+	code, _ := l.call(http.MethodPost, "/api/v1/categories", category, l.adminToken)
+	assert.Equal(t, http.StatusConflict, code, "live names stay unique")
+	code, _ = l.call(http.MethodPost, "/api/v1/products", product, l.adminToken)
+	assert.Equal(t, http.StatusConflict, code, "live SKUs stay unique")
+
+	user := map[string]interface{}{"first_name": "Again", "email": "again@example.com", "password": "password123"}
+	remove(fmt.Sprintf("/api/v1/users/%s", create("/api/v1/users", user, "")))
+	create("/api/v1/users", user, "")
+}
+
+func TestInventoryListSkipsDeletedProducts(t *testing.T) {
+	l := newLifecycle(t)
+
+	listed := func() []struct {
+		ProductID   uuid.UUID `json:"product_id"`
+		ProductName string    `json:"product_name"`
+	} {
+		t.Helper()
+		code, api := l.call(http.MethodGet, "/api/v1/inventory", nil, l.adminToken)
+		require.Equal(t, http.StatusOK, code, api.Error)
+		var items []struct {
+			ProductID   uuid.UUID `json:"product_id"`
+			ProductName string    `json:"product_name"`
+		}
+		testintegration.DecodeData(t, api.Data, &items)
+		return items
+	}
+
+	items := listed()
+	require.Len(t, items, 1)
+	assert.Equal(t, l.productID, items[0].ProductID)
+	assert.Equal(t, "Lifecycle Product", items[0].ProductName)
+
+	code, api := l.call(http.MethodDelete, fmt.Sprintf("/api/v1/products/%s", l.productID), nil, l.adminToken)
+	require.Equal(t, http.StatusOK, code, api.Error)
+	assert.Empty(t, listed())
+}

@@ -9,6 +9,8 @@ reproducible Locust load-test suite.
 Documentation:
 
 - **This README**: architecture, setup, API, observability, testing, roadmap.
+- **[frontend/README.md](frontend/README.md)**: the React storefront (`/shop`)
+  and admin console (`/admin`): setup, features, payments and tests.
 - **[LOAD_TESTING.md](LOAD_TESTING.md)**: load-test scenarios, what to watch,
   measured results and troubleshooting.
 - API contract: Swagger UI at http://localhost:8080/swagger/index.html
@@ -25,6 +27,7 @@ Documentation:
 | CDC: PostgreSQL -> Debezium -> Kafka -> API consumer | Running and measured; the consumer only counts and logs events |
 | Locust suite with seeded data and load shapes | Implemented; results in LOAD_TESTING.md |
 | Authorization: `customer`/`admin` roles and resource ownership checks | Implemented; covered by unit and e2e tests, see [Authorization](#authorization) |
+| Web frontend: customer storefront and admin console (`frontend/`) | Implemented; covered by unit and Playwright browser tests |
 
 ## Architecture
 
@@ -106,21 +109,24 @@ cancellation of unpaid orders.
 Go 1.26, Gin, GORM, PostgreSQL 16, JWT, Razorpay, Viper, Zap, Swaggo,
 OpenTelemetry, OTel Collector 0.158.0, Jaeger 1.76.0, Prometheus v3.11.3,
 Grafana 13.0.1, Kafka 3.2 (KRaft) and Debezium 3.2, Locust 2.46, Docker
-Compose, GitHub Actions.
+Compose, GitHub Actions. Frontend: React 18, TypeScript, Vite, Tailwind CSS,
+TanStack Query, Recharts, Playwright.
 
 ## Project structure
 
 ```text
 cmd/server/            entry point (config, telemetry, DB, CDC consumer, HTTP server, graceful shutdown)
+cmd/seed/              demo-store seeder (DummyJSON catalogue, customers, orders, reviews)
 config/                config.go, prometheus.yml, collector-config.yaml,
                        debezium/ (connector + setup.sql), grafana/ (provisioning + dashboard)
 docs/                  generated Swagger
+frontend/              React storefront (/shop) and admin console (/admin), see frontend/README.md
 internal/api/          handlers (health), middleware, response, routes
 internal/app/          router and dependency wiring
 internal/database/     connection pool, migrations, health
 internal/messaging/    Kafka CDC consumer
 internal/models/       GORM models
-internal/modules/      auth, user, category, product, inventory, order, payment
+internal/modules/      auth, user, category, product, inventory, order, payment, review
 internal/repository/   data access
 internal/test/         e2e/, integration/ (DB fixtures and harness), mocks/
 locust/                seed.py, scenarios/, requirements.txt
@@ -147,6 +153,18 @@ Get-Content config\debezium\setup.sql | docker exec -i order-postgres psql -U po
 curl.exe -X POST -H "Content-Type: application/json" --data "@config/debezium/postgres-connector.json" http://localhost:8083/connectors
 ```
 
+Frontend (storefront at http://localhost:5173/shop, admin console at
+`/admin`), with the API running:
+
+```powershell
+cd frontend; npm install; npm run dev
+```
+
+Load a large demo store (about 840 products with photos, 1,500 customers,
+25,000 orders and 11,700 reviews) with `go run ./cmd/seed`, and create the
+first admin with `make promote-admin EMAIL=...`; see
+[frontend/README.md](frontend/README.md).
+
 On Linux/macOS the same steps work with `cp`, `cat ... |` and `curl`; a
 `Makefile` wraps the common commands (`make run`, `make test`, `make test-db`,
 `make swagger`, ...).
@@ -170,6 +188,7 @@ Never commit `.env`.
 
 | Interface | URL |
 |---|---|
+| Storefront / admin console | http://localhost:5173/shop, http://localhost:5173/admin (`npm run dev` in `frontend/`) |
 | API | http://localhost:8080/api/v1 |
 | Swagger UI | http://localhost:8080/swagger/index.html |
 | API metrics | http://localhost:8080/metrics |
@@ -190,10 +209,11 @@ category/product reads, health and the payment webhook, require
 | Health | `GET /health`, `/ready` (checks DB), `/ping`, `/version` |
 | Auth | `POST /auth/login`, `GET /auth/me` |
 | Users | `POST /users` (sign-up), `GET/PUT/DELETE /users/:id`, `GET /users`, `PATCH /users/:id/role` |
-| Catalog | `/categories`, `/products` (`GET /products/category/:categoryId`) |
+| Catalog | `/categories`, `/products` (`GET /products/category/:categoryId`), `GET /products/search` (words, category, brands, price, rating, stock and deals filters; sorting; paging; facets) |
+| Reviews | `GET /products/:id/reviews` (public, with rating histogram), `GET /products/:id/reviews/me`, `PUT /products/:id/reviews` (one per customer, verified when purchased), `DELETE /reviews/:id` (author or admin), `GET /reviews` (admin) |
 | Inventory | `/inventory`, `/inventory/:productId` + `add-stock`, `remove-stock`, `reserve`, `release`, `confirm` |
-| Orders | `POST /orders`, `GET /orders?page=&limit=` (limit <= 100), `GET /orders/me`, `GET /orders/:id`, `PATCH /orders/:id/status`, `PATCH /orders/:id/cancel` |
-| Payments | `POST /payments`, `GET /payments`, `/payments/summary`, `/payments/:id`, `/payments/order/:orderId`, `POST /payments/:id/refund`, `POST /payments/webhook` |
+| Orders | `POST /orders`, `GET /orders?page=&limit=&status=` (limit <= 100; `status` filters for admins), `GET /orders/summary` (admin: counts per status), `GET /orders/me`, `GET /orders/:id`, `PATCH /orders/:id/status`, `PATCH /orders/:id/cancel` |
+| Payments | `POST /payments`, `POST /payments/verify`, `GET /payments`, `/payments/summary`, `/payments/:id`, `/payments/order/:orderId`, `POST /payments/:id/refund`, `POST /payments/webhook` |
 
 Regenerate Swagger after changing annotations:
 `swag init -g ./cmd/server/main.go --parseInternal --parseDependency`.
@@ -227,6 +247,15 @@ be promoted with `PATCH /api/v1/users/:id/role`. A role change takes effect
 at the user's next login.
 
 ### Payments and webhooks
+
+The frontend completes payments with `POST /payments/verify`: after
+Razorpay Checkout succeeds, the browser posts `razorpay_order_id`,
+`razorpay_payment_id` and `razorpay_signature`; the API verifies the
+signature (HMAC-SHA256 with the key secret) and the caller's ownership, then
+applies the same transition as `payment.captured` (`SUCCESS`, order `PAID`).
+Verification and the webhook are idempotent with each other, so payments
+complete locally without a public webhook URL, and the webhook remains the
+backstop when the browser never reports back.
 
 `payment-demo/` is a local checkout page for Razorpay test mode: create an
 order, `POST /payments`, open the page and pay. Razorpay cannot reach
@@ -286,6 +315,8 @@ and consumer lag with
 | Unit | `go test ./...` | nothing |
 | Repository + order service integration | `go test -p 1 -tags=integration ./internal/repository ./internal/modules/order` | `ENABLE_DB_TESTS=1`, `postgres-test` container (5433) |
 | HTTP end-to-end | `go test -tags=e2e ./internal/test/e2e/...` | same |
+| Frontend unit + typecheck | `cd frontend; npm run typecheck; npm test` | Node 22 |
+| Frontend browser end-to-end | `cd frontend; npx playwright test` | API running, an admin account, Razorpay test keys; see [frontend/README.md](frontend/README.md#tests) |
 
 DB-backed tests are skipped unless `ENABLE_DB_TESTS=1` (PowerShell:
 `$env:ENABLE_DB_TESTS = "1"`). They truncate the shared test database, so
@@ -295,7 +326,8 @@ cancels of one order, opposite-order multi-item orders (deadlock) and
 concurrent stock removals.
 
 CI (`.github/workflows/ci.yml`) runs gofmt, build, unit, integration and e2e
-tests against a PostgreSQL service container.
+tests against a PostgreSQL service container, plus the frontend typecheck,
+unit tests and production build.
 
 Load tests: see [LOAD_TESTING.md](LOAD_TESTING.md). Quick start:
 

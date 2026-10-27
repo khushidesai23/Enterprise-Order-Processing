@@ -31,6 +31,8 @@ type orderRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Order, error)
 	GetByIDTx(ctx context.Context, tx *gorm.DB, id uuid.UUID) (*models.Order, error)
 	GetAll(ctx context.Context, limit, offset int) ([]models.Order, error)
+	GetAllByStatus(ctx context.Context, status models.OrderStatus, limit, offset int) ([]models.Order, error)
+	CountByStatus(ctx context.Context) (map[models.OrderStatus]int64, error)
 	GetByUserID(ctx context.Context, userID uuid.UUID) ([]models.Order, error)
 	GetByUserIDPage(ctx context.Context, userID uuid.UUID, limit, offset int) ([]models.Order, error)
 	UpdateStatusTx(ctx context.Context, tx *gorm.DB, id uuid.UUID, status models.OrderStatus) error
@@ -344,6 +346,55 @@ func (s *Service) GetOrders(
 	}
 
 	return ToOrderList(orders), nil
+}
+
+// GetOrdersByStatus returns one page of orders in a status. Callers must
+// restrict it to admins.
+func (s *Service) GetOrdersByStatus(
+	ctx context.Context,
+	status models.OrderStatus,
+	page int,
+	pageSize int,
+) ([]OrderListResponse, error) {
+
+	if !IsValidOrderStatus(status) {
+		return nil, ErrInvalidOrderStatus
+	}
+
+	orders, err := s.orderRepository.GetAllByStatus(
+		ctx,
+		status,
+		pageSize,
+		(page-1)*pageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return ToOrderList(orders), nil
+}
+
+// GetOrderStatusSummary counts orders per status. Callers must restrict it
+// to admins.
+func (s *Service) GetOrderStatusSummary(
+	ctx context.Context,
+) (*OrderStatusSummary, error) {
+
+	counts, err := s.orderRepository.CountByStatus(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	summary := OrderStatusSummary{
+		ByStatus: make(map[models.OrderStatus]int64, len(orderStatuses)),
+	}
+
+	for _, status := range orderStatuses {
+		summary.ByStatus[status] = counts[status]
+		summary.TotalOrders += counts[status]
+	}
+
+	return &summary, nil
 }
 
 // GetOrdersByUser returns all orders for a specific user.

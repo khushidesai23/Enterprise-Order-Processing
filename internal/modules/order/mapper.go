@@ -53,6 +53,7 @@ func ToOrderResponse(order *models.Order) OrderResponse {
 
 		orderItem.ProductName = item.Product.Name
 		orderItem.SKU = item.Product.SKU
+		orderItem.ImageURL = item.Product.ImageURL
 
 		items = append(items, orderItem)
 	}
@@ -69,6 +70,7 @@ func ToOrderListResponse(order *models.Order) OrderListResponse {
 		Status:      order.Status,
 		TotalAmount: order.TotalAmount,
 		TotalItems:  len(order.Items),
+		CreatedAt:   order.CreatedAt.Format(time.RFC3339),
 	}
 }
 

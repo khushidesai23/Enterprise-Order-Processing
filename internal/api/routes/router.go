@@ -13,6 +13,7 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/order"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/payment"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/product"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/review"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/user"
 
 	swaggerFiles "github.com/swaggo/files"
@@ -28,6 +29,7 @@ func Register(
 	inventoryHandler *inventory.Handler,
 	orderHandler *order.Handler,
 	paymentHandler *payment.Handler,
+	reviewHandler *review.Handler,
 	authHandler *auth.Handler,
 	jwtManager *auth.JWTManager,
 ) {
@@ -101,6 +103,13 @@ func Register(
 		payment.RegisterRoutes(
 			api,
 			paymentHandler,
+			authMiddleware,
+			adminOnly,
+		)
+
+		review.RegisterRoutes(
+			api,
+			reviewHandler,
 			authMiddleware,
 			adminOnly,
 		)

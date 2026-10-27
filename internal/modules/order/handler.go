@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/api/response"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/authz"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
 )
 
 type Handler struct {
@@ -133,6 +134,7 @@ func (h *Handler) GetOrder(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param page query int false "Page number" default(1) minimum(1)
+// @Param status query string false "Only orders in this status (admins only; ignored for customers)" Enums(CREATED, PAYMENT_PENDING, PAID, PACKED, SHIPPED, DELIVERED, CANCELLED)
 // @Param limit query int false "Orders per page" default(50) minimum(1) maximum(100)
 // @Success 200 {object} response.APIResponse
 // @Failure 401 {object} response.APIResponse
@@ -154,7 +156,22 @@ func (h *Handler) GetOrders(c *gin.Context) {
 		return
 	}
 
-	orders, err := h.service.GetOrders(c.Request.Context(), page, limit)
+	var (
+		orders []OrderListResponse
+		err    error
+	)
+
+	if status := c.Query("status"); status != "" {
+		orders, err = h.service.GetOrdersByStatus(c.Request.Context(), models.OrderStatus(status), page, limit)
+
+		if errors.Is(err, ErrInvalidOrderStatus) {
+			response.Error(c, http.StatusBadRequest, err.Error())
+			return
+		}
+	} else {
+		orders, err = h.service.GetOrders(c.Request.Context(), page, limit)
+	}
+
 	if err != nil {
 
 		response.Error(c, http.StatusInternalServerError, err.Error())
@@ -162,6 +179,26 @@ func (h *Handler) GetOrders(c *gin.Context) {
 	}
 
 	response.OK(c, "orders retrieved successfully", orders)
+}
+
+// GET /orders/summary
+// @Summary Order Status Summary
+// @Description Count orders per status (admin only)
+// @Tags Orders
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} response.APIResponse
+// @Failure 403 {object} response.APIResponse
+// @Router /orders/summary [get]
+func (h *Handler) GetOrderSummary(c *gin.Context) {
+
+	summary, err := h.service.GetOrderStatusSummary(c.Request.Context())
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response.OK(c, "order summary retrieved successfully", summary)
 }
 
 // GET /orders/me

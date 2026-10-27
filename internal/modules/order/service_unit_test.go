@@ -47,6 +47,18 @@ func (m *orderRepositoryMock) GetAll(ctx context.Context, limit, offset int) ([]
 	return orders, args.Error(1)
 }
 
+func (m *orderRepositoryMock) GetAllByStatus(ctx context.Context, status models.OrderStatus, limit, offset int) ([]models.Order, error) {
+	args := m.Called(ctx, status, limit, offset)
+	orders, _ := args.Get(0).([]models.Order)
+	return orders, args.Error(1)
+}
+
+func (m *orderRepositoryMock) CountByStatus(ctx context.Context) (map[models.OrderStatus]int64, error) {
+	args := m.Called(ctx)
+	counts, _ := args.Get(0).(map[models.OrderStatus]int64)
+	return counts, args.Error(1)
+}
+
 func (m *orderRepositoryMock) GetByUserID(ctx context.Context, userID uuid.UUID) ([]models.Order, error) {
 	args := m.Called(ctx, userID)
 	orders, _ := args.Get(0).([]models.Order)

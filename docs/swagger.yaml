@@ -30,6 +30,13 @@ definitions:
     - OrderShipped
     - OrderDelivered
     - OrderCancelled
+  github_com_khushidesai23_Enterprise-Order-Processing_internal_models.ProductSpec:
+    properties:
+      name:
+        type: string
+      value:
+        type: string
+    type: object
   github_com_khushidesai23_Enterprise-Order-Processing_internal_models.Role:
     enum:
     - customer
@@ -144,13 +151,41 @@ definitions:
       signature:
         type: string
     type: object
+  internal_modules_payment.VerifyPaymentRequest:
+    properties:
+      razorpay_order_id:
+        type: string
+      razorpay_payment_id:
+        type: string
+      razorpay_signature:
+        type: string
+    required:
+    - razorpay_order_id
+    - razorpay_payment_id
+    - razorpay_signature
+    type: object
   internal_modules_product.CreateProductRequest:
     properties:
+      brand:
+        description: Optional catalogue details.
+        maxLength: 100
+        type: string
       category_id:
         type: string
       description:
         maxLength: 1000
         type: string
+      image_url:
+        maxLength: 500
+        type: string
+      images:
+        items:
+          type: string
+        maxItems: 10
+        type: array
+      mrp:
+        minimum: 0
+        type: number
       name:
         maxLength: 255
         minLength: 2
@@ -161,6 +196,11 @@ definitions:
         maxLength: 100
         minLength: 2
         type: string
+      specs:
+        items:
+          $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_models.ProductSpec'
+        maxItems: 30
+        type: array
     required:
     - category_id
     - name
@@ -169,11 +209,25 @@ definitions:
     type: object
   internal_modules_product.UpdateProductRequest:
     properties:
+      brand:
+        maxLength: 100
+        type: string
       category_id:
         type: string
       description:
         maxLength: 1000
         type: string
+      image_url:
+        maxLength: 500
+        type: string
+      images:
+        items:
+          type: string
+        maxItems: 10
+        type: array
+      mrp:
+        minimum: 0
+        type: number
       name:
         maxLength: 255
         minLength: 2
@@ -184,11 +238,31 @@ definitions:
         maxLength: 100
         minLength: 2
         type: string
+      specs:
+        items:
+          $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_models.ProductSpec'
+        maxItems: 30
+        type: array
     required:
     - category_id
     - name
     - price
     - sku
+    type: object
+  internal_modules_review.UpsertReviewRequest:
+    properties:
+      body:
+        maxLength: 4000
+        type: string
+      rating:
+        maximum: 5
+        minimum: 1
+        type: integer
+      title:
+        maxLength: 150
+        type: string
+    required:
+    - rating
     type: object
   internal_modules_user.CreateUserRequest:
     properties:
@@ -750,6 +824,18 @@ paths:
         minimum: 1
         name: page
         type: integer
+      - description: Only orders in this status (admins only; ignored for customers)
+        enum:
+        - CREATED
+        - PAYMENT_PENDING
+        - PAID
+        - PACKED
+        - SHIPPED
+        - DELIVERED
+        - CANCELLED
+        in: query
+        name: status
+        type: string
       - default: 50
         description: Orders per page
         in: query
@@ -953,6 +1039,25 @@ paths:
       summary: Get Orders by Authenticated User
       tags:
       - Orders
+  /orders/summary:
+    get:
+      description: Count orders per status (admin only)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Order Status Summary
+      tags:
+      - Orders
   /payments:
     get:
       consumes:
@@ -1141,6 +1246,39 @@ paths:
       summary: Get Payment Summary
       tags:
       - Payments
+  /payments/verify:
+    post:
+      consumes:
+      - application/json
+      description: Complete a payment from the Razorpay Checkout success response
+        (own orders only, unless admin). Idempotent with the payment.captured webhook.
+      parameters:
+      - description: Razorpay Checkout response
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_modules_payment.VerifyPaymentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Verify Checkout Payment
+      tags:
+      - Payments
   /payments/webhook:
     post:
       consumes:
@@ -1324,6 +1462,119 @@ paths:
       summary: Update Product
       tags:
       - Products
+  /products/{id}/reviews:
+    get:
+      description: One page of a product's reviews with the rating summary of all
+        its reviews
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Only reviews with this star rating (1-5)
+        in: query
+        name: rating
+        type: integer
+      - description: Sort order
+        enum:
+        - recent
+        - highest
+        - lowest
+        in: query
+        name: sort
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Reviews per page
+        in: query
+        maximum: 100
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      summary: List Product Reviews
+      tags:
+      - Reviews
+    put:
+      consumes:
+      - application/json
+      description: Create or replace the caller's review of a product. Marked as a
+        verified purchase when the caller has a paid order containing it.
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Review
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_modules_review.UpsertReviewRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Write Review
+      tags:
+      - Reviews
+  /products/{id}/reviews/me:
+    get:
+      description: The caller's review of a product
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get My Review
+      tags:
+      - Reviews
   /products/category/{categoryId}:
     get:
       consumes:
@@ -1353,6 +1604,146 @@ paths:
       summary: Get Products by Category
       tags:
       - Products
+  /products/search:
+    get:
+      description: Search the catalogue with filters, sorting, pagination and facets
+      parameters:
+      - description: Search words (all must match name, brand, category or SKU)
+        in: query
+        name: q
+        type: string
+      - description: Category ID
+        in: query
+        name: category_id
+        type: string
+      - collectionFormat: multi
+        description: Brands (repeatable)
+        in: query
+        items:
+          type: string
+        name: brand
+        type: array
+      - description: Minimum price
+        in: query
+        name: min_price
+        type: number
+      - description: Maximum price
+        in: query
+        name: max_price
+        type: number
+      - description: Minimum average rating (1-5)
+        in: query
+        name: min_rating
+        type: number
+      - description: Only products with available stock
+        in: query
+        name: in_stock
+        type: boolean
+      - description: Only discounted products (mrp above price)
+        in: query
+        name: deals
+        type: boolean
+      - description: Sort order
+        enum:
+        - relevance
+        - featured
+        - price_asc
+        - price_desc
+        - rating
+        - reviews
+        - newest
+        - discount
+        - bestselling
+        in: query
+        name: sort
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 24
+        description: Products per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      summary: Search Products
+      tags:
+      - Products
+  /reviews:
+    get:
+      description: All reviews, newest first, for moderation (admin only)
+      parameters:
+      - description: Only reviews with this star rating (1-5)
+        in: query
+        name: rating
+        type: integer
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Reviews per page
+        in: query
+        maximum: 100
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: List Reviews
+      tags:
+      - Reviews
+  /reviews/{id}:
+    delete:
+      description: Delete a review (own reviews only, unless admin)
+      parameters:
+      - description: Review ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete Review
+      tags:
+      - Reviews
   /users:
     get:
       consumes:

@@ -13,6 +13,11 @@ func CORS() gin.HandlerFunc {
 		AllowOrigins: []string{
 			"http://localhost:5500",
 			"http://127.0.0.1:5500",
+			// frontend/ (Vite dev server and preview)
+			"http://localhost:5173",
+			"http://127.0.0.1:5173",
+			"http://localhost:4173",
+			"http://127.0.0.1:4173",
 		},
 
 		AllowMethods: []string{

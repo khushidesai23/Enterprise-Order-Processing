@@ -8,7 +8,7 @@ type User struct {
 	FirstName string `gorm:"size:100;not null" json:"first_name"`
 	LastName  string `gorm:"size:100" json:"last_name"`
 
-	Email string `gorm:"size:255;uniqueIndex;not null" json:"email"`
+	Email string `gorm:"size:255;uniqueIndex:idx_users_email,where:deleted_at IS NULL;not null" json:"email"`
 
 	Password string `gorm:"size:255;not null" json:"-"`
 

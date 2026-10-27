@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+/* Design tokens: one palette shared by the storefront and the admin console. */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-background: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-muted: #f1f3f6;
+  --color-border: #e4e7ec;
+  --color-foreground: #101828;
+  --color-subtle: #475467;
+  --color-faint: #98a2b3;
+
+  --color-primary: #4f46e5;
+  --color-primary-hover: #4338ca;
+  --color-primary-soft: #eef2ff;
+  --color-primary-foreground: #ffffff;
+
+  --color-success: #039855;
+  --color-success-soft: #ecfdf3;
+  --color-warning: #dc6803;
+  --color-warning-soft: #fffaeb;
+  --color-danger: #d92d20;
+  --color-danger-soft: #fef3f2;
+  --color-info: #0086c9;
+  --color-info-soft: #f0f9ff;
+
+  /* Storefront chrome and calls to action */
+  --color-nav: #111a2e;
+  --color-nav-2: #1f2b45;
+  --color-nav-hover: #2c3a58;
+  --color-cart: #fcd34d;
+  --color-cart-hover: #fbbf24;
+  --color-buy: #fb923c;
+  --color-buy-hover: #f97316;
+  --color-deal: #c81e3a;
+  --color-star: #f59e0b;
+  --color-link: #2162a1;
+
+  --color-sidebar: #0f172a;
+  --color-sidebar-foreground: #cbd5e1;
+  --color-sidebar-active: #1e293b;
+
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.05), 0 1px 3px rgb(16 24 40 / 0.04);
+  --shadow-pop: 0 12px 32px -8px rgb(16 24 40 / 0.18);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+*,
+::before,
+::after {
+  border-color: var(--color-border);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-in {
+  animation: fade-in 160ms ease-out;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Horizontal product rails scroll without a visible bar. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

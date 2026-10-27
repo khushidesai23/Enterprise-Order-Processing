@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 )
 
 type productRepositoryMock struct {
@@ -57,6 +58,19 @@ func (m *productRepositoryMock) CategoryExists(ctx context.Context, categoryID u
 
 func (m *productRepositoryMock) Update(ctx context.Context, product *models.Product) error {
 	return m.Called(ctx, product).Error(0)
+}
+
+func (m *productRepositoryMock) Search(ctx context.Context, filter repository.ProductSearchFilter, orderBy string, orderVars []any, joinSales bool, limit, offset int) ([]models.Product, int64, error) {
+	args := m.Called(ctx, filter, orderBy, orderVars, joinSales, limit, offset)
+	products, _ := args.Get(0).([]models.Product)
+	return products, args.Get(1).(int64), args.Error(2)
+}
+
+func (m *productRepositoryMock) SearchFacets(ctx context.Context, filter repository.ProductSearchFilter, maxBrands int) ([]repository.CategoryCount, []repository.BrandCount, float64, float64, error) {
+	args := m.Called(ctx, filter, maxBrands)
+	categories, _ := args.Get(0).([]repository.CategoryCount)
+	brands, _ := args.Get(1).([]repository.BrandCount)
+	return categories, brands, args.Get(2).(float64), args.Get(3).(float64), args.Error(4)
 }
 
 func (m *productRepositoryMock) Delete(ctx context.Context, product *models.Product) error {

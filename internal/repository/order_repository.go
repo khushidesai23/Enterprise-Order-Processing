@@ -144,6 +144,64 @@ func (r *OrderRepository) GetAll(
 	return orders, nil
 }
 
+// GetAllByStatus returns one page of orders in the given status, newest
+// first.
+func (r *OrderRepository) GetAllByStatus(
+	ctx context.Context,
+	status models.OrderStatus,
+	limit int,
+	offset int,
+) ([]models.Order, error) {
+
+	var orders []models.Order
+
+	err := r.db.
+		WithContext(ctx).
+		Preload("Items").
+		Where("status = ?", status).
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&orders).
+		Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return orders, nil
+}
+
+// CountByStatus returns the number of orders in each status.
+func (r *OrderRepository) CountByStatus(
+	ctx context.Context,
+) (map[models.OrderStatus]int64, error) {
+
+	var rows []struct {
+		Status models.OrderStatus
+		Count  int64
+	}
+
+	err := r.db.
+		WithContext(ctx).
+		Model(&models.Order{}).
+		Select("status, COUNT(*) AS count").
+		Group("status").
+		Scan(&rows).
+		Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	counts := make(map[models.OrderStatus]int64, len(rows))
+	for _, row := range rows {
+		counts[row.Status] = row.Count
+	}
+
+	return counts, nil
+}
+
 func (r *OrderRepository) GetByUserID(
 	ctx context.Context,
 	userID uuid.UUID,

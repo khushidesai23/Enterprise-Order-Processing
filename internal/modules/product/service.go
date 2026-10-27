@@ -3,12 +3,14 @@ package product
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/models"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/repository"
 	"github.com/khushidesai23/Enterprise-Order-Processing/pkg/logger"
 )
 
@@ -27,6 +29,8 @@ type productRepository interface {
 	CategoryExists(ctx context.Context, categoryID uuid.UUID) (bool, error)
 	Update(ctx context.Context, product *models.Product) error
 	Delete(ctx context.Context, product *models.Product) error
+	Search(ctx context.Context, filter repository.ProductSearchFilter, orderBy string, orderVars []any, joinSales bool, limit, offset int) ([]models.Product, int64, error)
+	SearchFacets(ctx context.Context, filter repository.ProductSearchFilter, maxBrands int) ([]repository.CategoryCount, []repository.BrandCount, float64, float64, error)
 }
 
 func NewService(
@@ -44,6 +48,10 @@ func (s *Service) CreateProduct(
 	ctx context.Context,
 	req CreateProductRequest,
 ) (*ProductResponse, error) {
+
+	if req.MRP > 0 && req.MRP < req.Price {
+		return nil, ErrInvalidMRP
+	}
 
 	// Check Category
 	exists, err := s.productRepository.CategoryExists(
@@ -216,6 +224,10 @@ func (s *Service) UpdateProduct(
 
 	UpdateProductModel(product, req)
 
+	if product.MRP > 0 && product.MRP < product.Price {
+		return nil, ErrInvalidMRP
+	}
+
 	if err := s.productRepository.Update(
 		ctx,
 		product,
@@ -275,4 +287,104 @@ func (s *Service) DeleteProduct(
 	)
 
 	return nil
+}
+
+// searchOrders maps each sort to its ORDER BY clause.
+var searchOrders = map[string]string{
+	SortFeatured:    "products.rating_count DESC, products.rating_average DESC",
+	SortPriceAsc:    "products.price ASC",
+	SortPriceDesc:   "products.price DESC",
+	SortRating:      "products.rating_average DESC, products.rating_count DESC",
+	SortReviews:     "products.rating_count DESC",
+	SortNewest:      "products.created_at DESC",
+	SortDiscount:    "CASE WHEN products.mrp > products.price THEN (products.mrp - products.price) / products.mrp ELSE 0 END DESC",
+	SortBestselling: "COALESCE(sales.sold, 0) DESC, products.rating_count DESC",
+}
+
+const maxBrandFacets = 40
+
+// SearchProducts returns one page of products matching the request, with
+// facets describing the whole result set.
+func (s *Service) SearchProducts(
+	ctx context.Context,
+	req SearchProductsRequest,
+) (*ProductSearchResponse, error) {
+
+	filter := repository.ProductSearchFilter{
+		Words:      strings.Fields(req.Query),
+		CategoryID: req.CategoryID,
+		Brands:     req.Brands,
+		MinPrice:   req.MinPrice,
+		MaxPrice:   req.MaxPrice,
+		MinRating:  req.MinRating,
+		InStock:    req.InStock,
+		DealsOnly:  req.DealsOnly,
+	}
+
+	sort := req.Sort
+	if sort == "" || sort == SortRelevance && len(filter.Words) == 0 {
+		sort = SortFeatured
+		if len(filter.Words) > 0 {
+			sort = SortRelevance
+		}
+	}
+
+	orderBy, ok := searchOrders[sort]
+	var orderVars []any
+	if sort == SortRelevance {
+		// Names that start with the query, then names that contain it,
+		// then matches on brand, category or SKU only.
+		phrase := repository.EscapeLike(strings.Join(filter.Words, " "))
+		orderBy = "CASE WHEN products.name ILIKE ? THEN 0 WHEN products.name ILIKE ? THEN 1 ELSE 2 END, products.rating_count DESC"
+		orderVars = []any{phrase + "%", "%" + phrase + "%"}
+		ok = true
+	}
+	if !ok {
+		return nil, ErrInvalidSort
+	}
+
+	products, total, err := s.productRepository.Search(
+		ctx,
+		filter,
+		orderBy,
+		orderVars,
+		sort == SortBestselling,
+		req.Limit,
+		(req.Page-1)*req.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	categories, brands, priceMin, priceMax, err := s.productRepository.SearchFacets(ctx, filter, maxBrandFacets)
+	if err != nil {
+		return nil, err
+	}
+
+	response := ProductSearchResponse{
+		Items: ToProductList(products),
+		Total: total,
+		Page:  req.Page,
+		Limit: req.Limit,
+		Facets: SearchFacets{
+			Categories: make([]CategoryFacet, 0, len(categories)),
+			Brands:     make([]BrandFacet, 0, len(brands)),
+			PriceMin:   priceMin,
+			PriceMax:   priceMax,
+		},
+	}
+
+	for _, category := range categories {
+		response.Facets.Categories = append(response.Facets.Categories, CategoryFacet{
+			ID: category.ID, Name: category.Name, Count: category.Count,
+		})
+	}
+
+	for _, brand := range brands {
+		response.Facets.Brands = append(response.Facets.Brands, BrandFacet{
+			Name: brand.Name, Count: brand.Count,
+		})
+	}
+
+	return &response, nil
 }

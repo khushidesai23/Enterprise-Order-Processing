@@ -113,3 +113,11 @@ func (g *StubPaymentGateway) SignWebhook(body []byte) string {
 	hash.Write(body)
 	return hex.EncodeToString(hash.Sum(nil))
 }
+
+// SignCheckout returns the signature Razorpay Checkout hands the browser
+// for a successful payment attempt.
+func (g *StubPaymentGateway) SignCheckout(gatewayOrderID, paymentID string) string {
+	hash := hmac.New(sha256.New, []byte(g.keySecret))
+	hash.Write([]byte(gatewayOrderID + "|" + paymentID))
+	return hex.EncodeToString(hash.Sum(nil))
+}

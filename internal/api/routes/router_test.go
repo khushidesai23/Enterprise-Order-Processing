@@ -19,6 +19,7 @@ import (
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/order"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/payment"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/product"
+	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/review"
 	"github.com/khushidesai23/Enterprise-Order-Processing/internal/modules/user"
 )
 
@@ -46,6 +47,8 @@ var adminOnlyRoutes = []struct {
 	{http.MethodPatch, "/api/v1/inventory/{id}/release"},
 	{http.MethodPatch, "/api/v1/inventory/{id}/confirm"},
 	{http.MethodPatch, "/api/v1/orders/{id}/status"},
+	{http.MethodGet, "/api/v1/orders/summary"},
+	{http.MethodGet, "/api/v1/reviews"},
 	{http.MethodGet, "/api/v1/payments"},
 	{http.MethodGet, "/api/v1/payments/summary"},
 	{http.MethodPost, "/api/v1/payments/{id}/refund"},
@@ -63,6 +66,7 @@ func newTestRouter(jwtManager *auth.JWTManager) *gin.Engine {
 		inventory.NewHandler(nil),
 		order.NewHandler(nil),
 		payment.NewHandler(nil),
+		review.NewHandler(nil),
 		auth.NewHandler(nil),
 		jwtManager,
 	)

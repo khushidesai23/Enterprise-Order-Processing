@@ -835,6 +835,21 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "CREATED",
+                            "PAYMENT_PENDING",
+                            "PAID",
+                            "PACKED",
+                            "SHIPPED",
+                            "DELIVERED",
+                            "CANCELLED"
+                        ],
+                        "type": "string",
+                        "description": "Only orders in this status (admins only; ignored for customers)",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
                         "maximum": 100,
                         "minimum": 1,
                         "type": "integer",
@@ -967,6 +982,37 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Count orders per status (admin only)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Order Status Summary",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
                         }
@@ -1314,6 +1360,57 @@ const docTemplate = `{
                 }
             }
         },
+        "/payments/verify": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Complete a payment from the Razorpay Checkout success response (own orders only, unless admin). Idempotent with the payment.captured webhook.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Verify Checkout Payment",
+                "parameters": [
+                    {
+                        "description": "Razorpay Checkout response",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_modules_payment.VerifyPaymentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/payments/webhook": {
             "post": {
                 "description": "Process a payment webhook from Razorpay",
@@ -1610,6 +1707,120 @@ const docTemplate = `{
                 }
             }
         },
+        "/products/search": {
+            "get": {
+                "description": "Search the catalogue with filters, sorting, pagination and facets",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Products"
+                ],
+                "summary": "Search Products",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Search words (all must match name, brand, category or SKU)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Category ID",
+                        "name": "category_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Brands (repeatable)",
+                        "name": "brand",
+                        "in": "query"
+                    },
+                    {
+                        "type": "number",
+                        "description": "Minimum price",
+                        "name": "min_price",
+                        "in": "query"
+                    },
+                    {
+                        "type": "number",
+                        "description": "Maximum price",
+                        "name": "max_price",
+                        "in": "query"
+                    },
+                    {
+                        "type": "number",
+                        "description": "Minimum average rating (1-5)",
+                        "name": "min_rating",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Only products with available stock",
+                        "name": "in_stock",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Only discounted products (mrp above price)",
+                        "name": "deals",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "relevance",
+                            "featured",
+                            "price_asc",
+                            "price_desc",
+                            "rating",
+                            "reviews",
+                            "newest",
+                            "discount",
+                            "bestselling"
+                        ],
+                        "type": "string",
+                        "description": "Sort order",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 24,
+                        "description": "Products per page",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/products/{id}": {
             "get": {
                 "description": "Get product details by ID",
@@ -1744,6 +1955,269 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/products/{id}/reviews": {
+            "get": {
+                "description": "One page of a product's reviews with the rating summary of all its reviews",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Reviews"
+                ],
+                "summary": "List Product Reviews",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Only reviews with this star rating (1-5)",
+                        "name": "rating",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "recent",
+                            "highest",
+                            "lowest"
+                        ],
+                        "type": "string",
+                        "description": "Sort order",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Reviews per page",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create or replace the caller's review of a product. Marked as a verified purchase when the caller has a paid order containing it.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Reviews"
+                ],
+                "summary": "Write Review",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Review",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_modules_review.UpsertReviewRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/products/{id}/reviews/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The caller's review of a product",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Reviews"
+                ],
+                "summary": "Get My Review",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/reviews": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "All reviews, newest first, for moderation (admin only)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Reviews"
+                ],
+                "summary": "List Reviews",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Only reviews with this star rating (1-5)",
+                        "name": "rating",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Reviews per page",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/reviews/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Delete a review (own reviews only, unless admin)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Reviews"
+                ],
+                "summary": "Delete Review",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Review ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_api_response.APIResponse"
                         }
@@ -2098,6 +2572,17 @@ const docTemplate = `{
                 "OrderCancelled"
             ]
         },
+        "github_com_khushidesai23_Enterprise-Order-Processing_internal_models.ProductSpec": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
         "github_com_khushidesai23_Enterprise-Order-Processing_internal_models.Role": {
             "type": "string",
             "enum": [
@@ -2267,6 +2752,25 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_modules_payment.VerifyPaymentRequest": {
+            "type": "object",
+            "required": [
+                "razorpay_order_id",
+                "razorpay_payment_id",
+                "razorpay_signature"
+            ],
+            "properties": {
+                "razorpay_order_id": {
+                    "type": "string"
+                },
+                "razorpay_payment_id": {
+                    "type": "string"
+                },
+                "razorpay_signature": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_modules_product.CreateProductRequest": {
             "type": "object",
             "required": [
@@ -2276,12 +2780,32 @@ const docTemplate = `{
                 "sku"
             ],
             "properties": {
+                "brand": {
+                    "description": "Optional catalogue details.",
+                    "type": "string",
+                    "maxLength": 100
+                },
                 "category_id": {
                     "type": "string"
                 },
                 "description": {
                     "type": "string",
                     "maxLength": 1000
+                },
+                "image_url": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "images": {
+                    "type": "array",
+                    "maxItems": 10,
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "mrp": {
+                    "type": "number",
+                    "minimum": 0
                 },
                 "name": {
                     "type": "string",
@@ -2295,6 +2819,13 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 100,
                     "minLength": 2
+                },
+                "specs": {
+                    "type": "array",
+                    "maxItems": 30,
+                    "items": {
+                        "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_models.ProductSpec"
+                    }
                 }
             }
         },
@@ -2307,12 +2838,31 @@ const docTemplate = `{
                 "sku"
             ],
             "properties": {
+                "brand": {
+                    "type": "string",
+                    "maxLength": 100
+                },
                 "category_id": {
                     "type": "string"
                 },
                 "description": {
                     "type": "string",
                     "maxLength": 1000
+                },
+                "image_url": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "images": {
+                    "type": "array",
+                    "maxItems": 10,
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "mrp": {
+                    "type": "number",
+                    "minimum": 0
                 },
                 "name": {
                     "type": "string",
@@ -2326,6 +2876,34 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 100,
                     "minLength": 2
+                },
+                "specs": {
+                    "type": "array",
+                    "maxItems": 30,
+                    "items": {
+                        "$ref": "#/definitions/github_com_khushidesai23_Enterprise-Order-Processing_internal_models.ProductSpec"
+                    }
+                }
+            }
+        },
+        "internal_modules_review.UpsertReviewRequest": {
+            "type": "object",
+            "required": [
+                "rating"
+            ],
+            "properties": {
+                "body": {
+                    "type": "string",
+                    "maxLength": 4000
+                },
+                "rating": {
+                    "type": "integer",
+                    "maximum": 5,
+                    "minimum": 1
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 150
                 }
             }
         },

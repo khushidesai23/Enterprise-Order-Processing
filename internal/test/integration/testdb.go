@@ -73,7 +73,7 @@ func CleanupDatabase(t testing.TB, db *database.Database) {
 	t.Helper()
 
 	statement := strings.Join([]string{
-		"TRUNCATE TABLE payment_webhooks, payments, order_items, orders, inventories, products, categories, users RESTART IDENTITY CASCADE",
+		"TRUNCATE TABLE reviews, payment_webhooks, payments, order_items, orders, inventories, products, categories, users RESTART IDENTITY CASCADE",
 	}, ";")
 
 	if err := db.DB.Exec(statement).Error; err != nil {

@@ -149,3 +149,22 @@ func TestInventoryServiceReleaseReservedStockRejectsInvalidQuantity(t *testing.T
 	assert.Nil(t, response)
 	assert.ErrorIs(t, err, ErrInvalidQuantity)
 }
+
+func TestToInventoryListIncludesPreloadedProduct(t *testing.T) {
+	productID := uuid.New()
+	inventory := models.Inventory{
+		ProductID:         productID,
+		AvailableQuantity: 7,
+		ReservedQuantity:  2,
+	}
+	inventory.Product.ID = productID
+	inventory.Product.Name = "Desk Lamp"
+	inventory.Product.SKU = "LAMP-1"
+
+	list := ToInventoryList([]models.Inventory{inventory, {ProductID: uuid.New()}})
+
+	require.Len(t, list, 2)
+	assert.Equal(t, "Desk Lamp", list[0].ProductName)
+	assert.Equal(t, "LAMP-1", list[0].SKU)
+	assert.Empty(t, list[1].ProductName, "no product preloaded")
+}

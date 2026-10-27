@@ -274,6 +274,58 @@ func (h *Handler) ProcessWebhook(c *gin.Context) {
 	response.OK(c, "webhook processed successfully", nil)
 }
 
+// POST /payments/verify
+// @Summary Verify Checkout Payment
+// @Description Complete a payment from the Razorpay Checkout success response (own orders only, unless admin). Idempotent with the payment.captured webhook.
+// @Tags Payments
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param request body VerifyPaymentRequest true "Razorpay Checkout response"
+// @Success 200 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Failure 404 {object} response.APIResponse
+// @Router /payments/verify [post]
+func (h *Handler) VerifyPayment(c *gin.Context) {
+
+	var req VerifyPaymentRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	principal, ok := authz.RequirePrincipal(c)
+	if !ok {
+		return
+	}
+
+	paymentResp, err := h.service.VerifyPayment(
+		c.Request.Context(),
+		req,
+		principal,
+	)
+	if err != nil {
+
+		switch {
+		case errors.Is(err, ErrInvalidSignature):
+			response.Error(c, http.StatusBadRequest, err.Error())
+			return
+
+		case errors.Is(err, ErrPaymentNotFound),
+			errors.Is(err, ErrOrderNotFound):
+			response.Error(c, http.StatusNotFound, err.Error())
+			return
+
+		default:
+			response.Error(c, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+
+	response.OK(c, "payment verified successfully", paymentResp)
+}
+
 // POST /payments/:id/refund
 // @Summary Refund Payment
 // @Description Refund a captured payment in full through Razorpay (admin only). Cancels the order and releases stock if it has not shipped.
