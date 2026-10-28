@@ -2,200 +2,201 @@
 
 ## 1. Architecture Style
 
-The project is implemented as a modular monolith.
+The backend is a modular monolith: one deployable Go process whose business
+capabilities are separate modules, each with its own handler, service, DTOs,
+mappers, errors and `RegisterRoutes`.
 
-This means the application runs as one deployable backend process, while business capabilities are organized into separate modules with their own handlers, services, DTOs, mappers, errors, and routing.
-
-This is appropriate for the current learning and implementation phase because it keeps local development manageable while preserving clear boundaries for future extraction.
-
-## 2. Request Flow
+Modules call each other through service interfaces, not HTTP, so a module
+can later be extracted without changing its callers.
 
 ```text
-Client
-  |
-  v
-Gin Router
-  |
-  v
-Middleware
-  |
-  v
-Handler
-  |
-  v
-Service
-  |
-  v
-Repository
-  |
-  v
-PostgreSQL
+                    React storefront (/shop) + admin console (/admin)
+                                         |
+                                         v  /api/v1
+Gin router -> middleware -> handler -> service -> repository -> PostgreSQL 16
+    |                                                                |
+    |  recovery, OTel, Prometheus, 10s request deadline,             | WAL (logical)
+    |  access log, CORS, JWT + RequireRole (per route)               v
+    |                                                     Debezium -> Kafka
+    +-- /metrics -> Prometheus -> Grafana                            |
+    +-- OTLP -> OTel Collector -> Jaeger          API CDC consumer <-+
 ```
 
-### Responsibilities
+## 2. Layers
 
-| Layer | Responsibility |
-|---|---|
-| Router | Registers endpoints and middleware |
-| Middleware | Authentication, CORS, request/metrics concerns |
-| Handler | HTTP request parsing and response handling |
-| Service | Business rules and workflow orchestration |
-| Repository | Database access |
-| Model | Persistent data representation |
+| Layer | Package | Responsibility |
+|---|---|---|
+| Composition | `cmd/server`, `internal/app`, `internal/api/routes` | Config, telemetry, DB, migrations, CDC consumer, dependency wiring, routes, graceful shutdown |
+| Middleware | `internal/api/middleware` | JWT auth, `RequireRole`, CORS, Prometheus, request deadline, access log |
+| Authorization | `internal/authz` | The caller (`Principal`) and ownership checks |
+| Handler | `internal/modules/<module>` | HTTP parsing, validation, response mapping |
+| Service | `internal/modules/<module>` | Business rules and transactions |
+| Repository | `internal/repository` | All database access (GORM) |
+| Model | `internal/models` | Persistent data |
+| Messaging | `internal/messaging/kafka` | Debezium CDC consumer |
+| Shared | `pkg/logger`, `pkg/metrics`, `pkg/telemetry`, `pkg/utils`, `pkg/validator` | Zap logger, Prometheus collectors, OTel tracer, helpers |
 
-## 3. Application Composition
+## 3. Startup
 
-The application startup is responsible for:
-
-1. Loading configuration.
-2. Registering Prometheus metrics.
-3. Initializing OpenTelemetry tracing.
-4. Initializing structured logging.
-5. Connecting to PostgreSQL.
-6. Running database migrations.
-7. Building application dependencies and routes.
-8. Starting the HTTP server.
-9. Performing graceful shutdown.
+1. Load configuration (environment variables, optional `.env`).
+2. Register Prometheus metrics.
+3. Initialize OpenTelemetry tracing (skipped when `OTEL_ENABLED=false`).
+4. Initialize the Zap JSON logger.
+5. Connect to PostgreSQL and run migrations.
+6. Start the CDC consumer (skipped when `KAFKA_CDC_ENABLED=false`).
+7. Build dependencies and routes, start the HTTP server.
+8. On SIGINT/SIGTERM, stop the CDC consumer, drain the HTTP server, then
+   flush the tracer and close the DB pool.
 
 ## 4. Business Modules
 
-```text
-auth
-user
-category
-product
-inventory
-order
-payment
-```
-
-The modules interact through application-level service logic rather than network calls because the application is currently a single deployable unit.
+| Module | Responsibility |
+|---|---|
+| `auth` | Login (bcrypt, constant-time for unknown emails), JWT issue, `/auth/me` |
+| `user` | Sign-up (always `customer`), profiles, admin user management, role changes |
+| `category` | Category CRUD; a category with products cannot be deleted |
+| `product` | Product CRUD, catalogue details, search with filters, sorting, paging and facets |
+| `review` | One review per customer per product, verified-purchase flag, rating histogram |
+| `inventory` | Stock levels and add/remove/reserve/release/confirm |
+| `order` | Order creation with stock reservation, lifecycle, cancel, admin status summary |
+| `payment` | Razorpay checkout, signature verification, webhooks, refunds, payment summary |
 
 ## 5. Order and Inventory Consistency
 
-Order creation and inventory reservation are critical business operations.
-
-The intended consistency model is:
-
 ```text
-Begin Transaction
+Read user and product prices (outside the transaction)
       |
       v
-Validate Order Request
+Begin transaction
       |
       v
-Validate Stock
+Insert order with total
       |
       v
-Reserve Inventory
+For each item, in product-ID order:
+  UPDATE inventories SET available -= q, reserved += q
+  WHERE product_id = ? AND available_quantity >= q
       |
       v
-Persist Order and Items
+Insert order items
       |
       v
-Commit
+Commit (any failure rolls everything back)
 ```
 
-If a critical step fails, the transaction should fail rather than leaving partially applied business state.
+- The guarded `UPDATE` means stock can never go negative.
+- Locking items in product-ID order prevents deadlocks between multi-item
+  orders.
+- Status changes lock the order row (`SELECT ... FOR UPDATE OF orders`), so
+  reserved stock is released (cancel) or confirmed (ship) exactly once.
+
+Lifecycle:
+
+```text
+CREATED -> PAYMENT_PENDING -> PAID -> PACKED -> SHIPPED -> DELIVERED
+   |             |             |
+   +-------------+-------------+--> CANCELLED (releases reserved stock)
+```
 
 ## 6. Payment Architecture
 
 ```text
-Application
-    |
-    v
-Payment Service
-    |
-    v
-Gateway Abstraction
-    |
-    v
-Razorpay Gateway
+Payment Service -> PaymentGateway interface -> Razorpay gateway (razorpay-go)
+                                            -> Stub gateway (tests)
 ```
 
-This abstraction keeps payment-provider-specific logic separate from the main order workflow.
+Two paths complete a payment, and they are idempotent with each other:
 
-Webhook processing adds:
+- `POST /payments/verify`: the browser posts the Checkout result; the API
+  checks the HMAC-SHA256 signature and ownership.
+- `POST /payments/webhook`: Razorpay's server-to-server event.
 
 ```text
-Webhook Received
+Webhook received
     |
     v
-Verify Signature
+Verify X-Razorpay-Signature (bad -> 401)
     |
     v
-Check Idempotency
+Insert payment_webhooks row; duplicate X-Razorpay-Event-Id -> acknowledge, stop
     |
     v
-Persist Event (duplicate event ID -> acknowledge, stop)
+Lock order, then re-read payment
     |
     v
-Lock Order, then re-read Payment
+Update payment (never backwards: a late failure cannot undo a capture)
     |
     v
-Update Payment (never backwards: a late failure cannot undo a capture)
-    |
-    v
-Update Order
+Update order, commit (failure rolls back the webhook row so the retry is applied)
 ```
 
-A failed payment attempt leaves the order `PAYMENT_PENDING` with its stock
-reserved; checkout returns the same Razorpay order so the customer can
-retry. Refunds go through `PaymentGateway.RefundPayment`; the gateway call
-is the last step before commit, and the `refund.created` webhook reconciles
-the rare case where it succeeds but the commit does not.
+A failed attempt leaves the order `PAYMENT_PENDING` with stock reserved, and
+checkout returns the same Razorpay order for a retry. Refunds go through
+`PaymentGateway.RefundPayment` as the last step before commit; the
+`refund.created` webhook covers a refund that succeeded when the commit
+did not.
 
-## 7. Observability Architecture
+## 7. Change Data Capture
 
 ```text
-HTTP Requests
-    |
-    +--> Prometheus middleware / metrics
-    |
-    +--> OpenTelemetry spans
-    |
-    +--> Structured logs
-```
-
-Tracing:
-
-```text
-Application -> OTEL Collector -> Jaeger
-```
-
-Metrics:
-
-```text
-Application /metrics -> Prometheus -> Grafana
-```
-
-Logs currently go to application stdout and are not implemented as a Loki pipeline.
-
-## 8. Future Event-Driven Evolution
-
-The planned future architecture is:
-
-```text
-PostgreSQL
+PostgreSQL (wal_level=logical, publication + replication slot)
     |
     v
-WAL
+Debezium PostgreSQL connector (Kafka Connect)
     |
     v
-Debezium
+Kafka topics order-processing.public.{categories,orders,inventories}
     |
     v
-Kafka / Event Stream
-    |
-    +--> Notification Consumer
-    +--> Analytics Consumer
-    +--> Audit Consumer
+API CDC consumer (group order-processing-cdc-consumer)
+    -> order_processing_cdc_* metrics and logs
 ```
 
-This should be introduced after the core business model is stable.
+The consumer currently counts and logs events; it has no business logic.
+Delivery is at-least-once from Debezium, and the consumer commits offsets
+before processing (at-most-once). Notification, analytics or audit consumers
+need deduplication on the event's source position. See
+[FAILURE_RECOVERY_DRILLS.pdf](FAILURE_RECOVERY_DRILLS.pdf).
 
-## 9. Key Trade-off
+## 8. Observability
 
-A modular monolith has lower operational complexity today.
+| Signal | Path |
+|---|---|
+| Traces | otelgin + otelgorm -> OTLP -> OTel Collector -> Jaeger |
+| Metrics | `/metrics` -> Prometheus -> provisioned Grafana dashboard |
+| Logs | Zap JSON on stdout with `trace_id` and `span_id` |
 
-CDC and event streaming will add stronger decoupling later, but also introduce infrastructure, delivery semantics, schema evolution, consumer idempotency, observability, and operational overhead.
+Details are in [OBSERVABILITY.md](OBSERVABILITY.md).
+
+## 9. Frontend
+
+`frontend/` is a React 18 + TypeScript + Vite single-page app with two areas:
+
+- the **meridian/** storefront at `/shop`;
+- the admin console at `/admin`.
+
+It uses TanStack Query against `/api/v1`. In development Vite proxies `/api`
+to `:8080`; in production Netlify does. See
+[frontend/README.md](../frontend/README.md).
+
+## 10. Deployment
+
+| Part | Local | Hosted |
+|---|---|---|
+| Frontend | Vite dev server (5173) | Netlify, proxies `/api/*` to Render |
+| API | `go run ./cmd/server` on the host | Render (Docker, `Dockerfile`) |
+| Database | `postgres` container | Neon |
+| Kafka, Debezium, OTel, Prometheus, Grafana | Docker Compose | Not deployed (`OTEL_ENABLED=false`, `KAFKA_CDC_ENABLED=false`) |
+
+See [DEPLOYMENT.md](../DEPLOYMENT.md).
+
+## 11. Key Trade-offs
+
+- A modular monolith keeps transactions local and operations simple. The
+  cost is that modules scale together.
+- CDC decouples future consumers from the write path. It adds
+  infrastructure, at-least-once delivery, schema evolution and connector
+  operations; the drills showed the connector needs a heartbeat and
+  restart monitoring.
+- Payment correctness relies on database locks and idempotency keys rather
+  than distributed transactions.

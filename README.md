@@ -15,6 +15,16 @@ Documentation:
   and admin console (`/admin`): setup, features, payments and tests.
 - **[LOAD_TESTING.md](LOAD_TESTING.md)**: load-test scenarios, what to watch,
   measured results and troubleshooting.
+- **[documentation/](documentation/)**:
+  - [ARCHITECTURE.md](documentation/ARCHITECTURE.md),
+    [DEVELOPMENT.md](documentation/DEVELOPMENT.md),
+    [TESTING.md](documentation/TESTING.md),
+    [OBSERVABILITY.md](documentation/OBSERVABILITY.md),
+    [ROADMAP.md](documentation/ROADMAP.md);
+  - [PROJECT_REPORT.pdf](documentation/PROJECT_REPORT.pdf): the whole
+    project in one report;
+  - [FAILURE_RECOVERY_DRILLS.pdf](documentation/FAILURE_RECOVERY_DRILLS.pdf):
+    failure and recovery drill results.
 - API contract: Swagger UI at http://localhost:8080/swagger/index.html
   (`docs/swagger.yaml`).
 
@@ -30,6 +40,8 @@ Documentation:
 | Locust suite with seeded data and load shapes | Implemented; results in LOAD_TESTING.md |
 | Authorization: `customer`/`admin` roles and resource ownership checks | Implemented; covered by unit and e2e tests, see [Authorization](#authorization) |
 | Web frontend: customer storefront and admin console (`frontend/`) | Implemented; covered by unit and Playwright browser tests |
+| Hosted deployment: Netlify + Render + Neon | Implemented, see [DEPLOYMENT.md](DEPLOYMENT.md) |
+| Failure and recovery drills | Run; results and follow-up fixes in [FAILURE_RECOVERY_DRILLS.pdf](documentation/FAILURE_RECOVERY_DRILLS.pdf) |
 
 ## Architecture
 
@@ -122,6 +134,7 @@ cmd/seed/              demo-store seeder (DummyJSON catalogue, customers, orders
 config/                config.go, prometheus.yml, collector-config.yaml,
                        debezium/ (connector + setup.sql), grafana/ (provisioning + dashboard)
 docs/                  generated Swagger
+documentation/         architecture, development, testing, observability, roadmap, project and drill reports
 frontend/              React storefront (/shop) and admin console (/admin), see frontend/README.md
 internal/api/          handlers (health), middleware, response, routes
 internal/app/          router and dependency wiring
@@ -356,16 +369,41 @@ $env:LOCUST_ADMIN_EMAIL = "admin@example.com"; $env:LOCUST_ADMIN_PASSWORD = "...
   refunded automatically; it is logged for an admin to refund.
 - `BaseModel.BeforeCreate` always assigns a new UUID, so creating a record
   with a populated association re-IDs that association.
-- The CDC consumer has no business logic yet.
+- The CDC consumer has no business logic yet. It commits offsets before
+  processing (at-most-once), while Debezium redelivers after restarts
+  (at-least-once).
+
+Found in the [failure drills](documentation/FAILURE_RECOVERY_DRILLS.pdf):
+
+- The Razorpay call in checkout ignores the request deadline and runs while
+  the order row is locked. A stalled gateway holds the lock for about 10 s,
+  and a refused connection returns `500` with the upstream URL in the
+  message.
+- `POST /orders` has no idempotency key. When the response is lost, the
+  order is still committed, and a client retry creates a duplicate.
+- After a PostgreSQL restart the Debezium connector stays `FAILED` until it
+  is restarted. After a Kafka outage it can report `RUNNING` while stuck.
+  Without a heartbeat, an idle replication slot keeps WAL growing.
+- A database outage returns `500` rather than `503`.
+- There is no load shedding: under saturation requests queue up to the
+  10 s deadline and `/ready` flaps.
+- Backups are manual `pg_dump`s and WAL archiving is off, so the recovery
+  point is the last dump.
 
 ## Roadmap
 
-1. CDC consumers with business logic (notifications, analytics, audit),
+1. Fixes from the drills: a gateway deadline outside the order lock, an
+   `Idempotency-Key` on order creation, a Debezium heartbeat and connector
+   restart, `503` for database outages, load shedding, scheduled backups
+   with WAL archiving.
+2. CDC consumers with business logic (notifications, analytics, audit),
    consumer idempotency, retry and dead-letter handling.
-2. Alerting and SLOs; PostgreSQL and Debezium JMX exporters.
-3. TimescaleDB for operational time-series, retention and archival.
-4. Token revocation (or short-lived tokens with refresh) so role changes and
+3. Alerting and SLOs; PostgreSQL and Debezium JMX exporters.
+4. TimescaleDB for operational time-series, retention and archival.
+5. Token revocation (or short-lived tokens with refresh) so role changes and
    deactivation take effect immediately.
+
+The full roadmap is in [documentation/ROADMAP.md](documentation/ROADMAP.md).
 
 ## Author
 
