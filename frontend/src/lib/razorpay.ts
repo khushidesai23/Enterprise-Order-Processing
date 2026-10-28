@@ -62,11 +62,11 @@ export async function openCheckout(
       order_id: session.gateway_order_id,
       amount: Math.round(session.amount * 100),
       currency: session.currency,
-      name: "Meridian Market",
+      name: "meridian/",
       description: `Order ${session.order_id.slice(0, 8).toUpperCase()}`,
       prefill: { name: customer.name, email: customer.email },
       notes: { order_id: session.order_id },
-      theme: { color: "#4f46e5" },
+      theme: { color: "#0c0c0d" },
       handler: (response: CheckoutResult) => resolve({ kind: "paid", result: response }),
       modal: {
         ondismiss: () =>

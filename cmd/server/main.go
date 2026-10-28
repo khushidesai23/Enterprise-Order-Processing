@@ -45,15 +45,19 @@ func main() {
 	// Register Prometheus Metrics
 	metrics.Register()
 
-	// Initialize OpenTelemetry
-	otelShutdown, err := telemetry.InitTracer(
-		ctx,
-		cfg.OTelServiceName,
-		cfg.OTelServiceVersion,
-		cfg.OTelEnvironment,
-	)
-	if err != nil {
-		panic(err)
+	// Initialize OpenTelemetry (OTEL_ENABLED=false where no collector runs;
+	// the global tracer then stays a no-op).
+	otelShutdown := func(context.Context) error { return nil }
+	if cfg.OTelEnabled {
+		otelShutdown, err = telemetry.InitTracer(
+			ctx,
+			cfg.OTelServiceName,
+			cfg.OTelServiceVersion,
+			cfg.OTelEnvironment,
+		)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	defer func() {
@@ -129,26 +133,8 @@ func main() {
 
 	log.Info("database migration completed")
 
-	// Kafka CDC Consumer
-	kafkaConsumer := kafka.NewConsumer(
-		kafka.Config{
-			Brokers:  cfg.KafkaBrokers,
-			GroupID:  cfg.KafkaCDCGroupID,
-			Topics:   cfg.KafkaCDCTopics,
-			MinBytes: cfg.KafkaMinBytes,
-			MaxBytes: cfg.KafkaMaxBytes,
-			MaxWait:  cfg.KafkaMaxWait,
-		},
-		log,
-	)
-	if err := metrics.RegisterCDCConsumerLag(kafkaConsumer.Lag); err != nil {
-		log.Fatal("CDC metrics registration failed", zap.Error(err))
-	}
-	log.Info(
-		"configured Kafka CDC consumer",
-		zap.Strings("brokers", cfg.KafkaBrokers),
-		zap.Strings("topics", cfg.KafkaCDCTopics),
-	)
+	// Kafka CDC Consumer (KAFKA_CDC_ENABLED=false where no Kafka runs).
+	var kafkaConsumer *kafka.Consumer
 
 	// Create a dedicated context for the Kafka consumer.
 	kafkaCtx, kafkaCancel := context.WithCancel(
@@ -160,20 +146,44 @@ func main() {
 	// before the application completely shuts down.
 	var kafkaWG sync.WaitGroup
 
-	kafkaWG.Add(1)
-
-	go func() {
-		defer kafkaWG.Done()
-
-		if err := kafkaConsumer.Start(kafkaCtx); err != nil &&
-			!errors.Is(err, context.Canceled) {
-
-			log.Error(
-				"Kafka CDC consumer stopped with error",
-				zap.Error(err),
-			)
+	if cfg.KafkaCDCEnabled {
+		kafkaConsumer = kafka.NewConsumer(
+			kafka.Config{
+				Brokers:  cfg.KafkaBrokers,
+				GroupID:  cfg.KafkaCDCGroupID,
+				Topics:   cfg.KafkaCDCTopics,
+				MinBytes: cfg.KafkaMinBytes,
+				MaxBytes: cfg.KafkaMaxBytes,
+				MaxWait:  cfg.KafkaMaxWait,
+			},
+			log,
+		)
+		if err := metrics.RegisterCDCConsumerLag(kafkaConsumer.Lag); err != nil {
+			log.Fatal("CDC metrics registration failed", zap.Error(err))
 		}
-	}()
+		log.Info(
+			"configured Kafka CDC consumer",
+			zap.Strings("brokers", cfg.KafkaBrokers),
+			zap.Strings("topics", cfg.KafkaCDCTopics),
+		)
+
+		kafkaWG.Add(1)
+
+		go func() {
+			defer kafkaWG.Done()
+
+			if err := kafkaConsumer.Start(kafkaCtx); err != nil &&
+				!errors.Is(err, context.Canceled) {
+
+				log.Error(
+					"Kafka CDC consumer stopped with error",
+					zap.Error(err),
+				)
+			}
+		}()
+	} else {
+		log.Info("Kafka CDC consumer disabled")
+	}
 
 	// HTTP Router
 	router, err := app.NewRouter(
@@ -235,17 +245,19 @@ func main() {
 	// Stop Kafka CDC Consumer
 	kafkaCancel()
 
-	if err := kafkaConsumer.Close(); err != nil {
-		log.Error(
-			"failed to close Kafka consumer",
-			zap.Error(err),
-		)
+	if kafkaConsumer != nil {
+		if err := kafkaConsumer.Close(); err != nil {
+			log.Error(
+				"failed to close Kafka consumer",
+				zap.Error(err),
+			)
+		}
+
+		// Wait for Kafka consumer goroutine to finish.
+		kafkaWG.Wait()
+
+		log.Info("Kafka CDC consumer stopped")
 	}
-
-	// Wait for Kafka consumer goroutine to finish.
-	kafkaWG.Wait()
-
-	log.Info("Kafka CDC consumer stopped")
 
 	// Shutdown HTTP Server
 	shutdownCtx, cancel := context.WithTimeout(

@@ -32,16 +32,25 @@ type Config struct {
 	RazorpayKeySecret     string
 	RazorpayWebhookSecret string
 
+	// CORSAllowedOrigins lists the browser origins allowed to call the API
+	// directly (a same-origin proxy needs its public origin here too,
+	// because proxies forward the browser's Origin header).
+	CORSAllowedOrigins []string
+
 	JWTSecret     string
 	JWTExpiration time.Duration
 
 	LogLevel string
 
+	// OTelEnabled turns off trace export where no collector runs.
+	OTelEnabled          bool
 	OTelServiceName      string
 	OTelServiceVersion   string
 	OTelEnvironment      string
 	OTelExporterEndpoint string
 
+	// KafkaCDCEnabled turns off the CDC consumer where no Kafka runs.
+	KafkaCDCEnabled bool
 	KafkaBrokers    []string
 	KafkaCDCGroupID string
 	KafkaCDCTopics  []string
@@ -81,6 +90,8 @@ func Load() (*Config, error) {
 		RazorpayKeySecret:     viper.GetString("RAZORPAY_KEY_SECRET"),
 		RazorpayWebhookSecret: viper.GetString("RAZORPAY_WEBHOOK_SECRET"),
 
+		CORSAllowedOrigins: parseList(viper.GetString("CORS_ALLOWED_ORIGINS")),
+
 		JWTSecret: viper.GetString("JWT_SECRET"),
 		JWTExpiration: mustParseDuration(
 			viper.GetString("JWT_EXPIRATION"),
@@ -88,11 +99,13 @@ func Load() (*Config, error) {
 
 		LogLevel: viper.GetString("LOG_LEVEL"),
 
+		OTelEnabled:          viper.GetBool("OTEL_ENABLED"),
 		OTelServiceName:      viper.GetString("OTEL_SERVICE_NAME"),
 		OTelServiceVersion:   viper.GetString("OTEL_SERVICE_VERSION"),
 		OTelEnvironment:      viper.GetString("OTEL_ENVIRONMENT"),
 		OTelExporterEndpoint: viper.GetString("OTEL_EXPORTER_OTLP_ENDPOINT"),
 
+		KafkaCDCEnabled: viper.GetBool("KAFKA_CDC_ENABLED"),
 		KafkaBrokers: parseList(
 			viper.GetString("KAFKA_BROKERS"),
 		),
@@ -142,6 +155,13 @@ func setDefaults() {
 	viper.SetDefault("JWT_EXPIRATION", 24*time.Hour)
 
 	viper.SetDefault("LOG_LEVEL", "debug")
+
+	viper.SetDefault("OTEL_ENABLED", true)
+	viper.SetDefault("KAFKA_CDC_ENABLED", true)
+	viper.SetDefault(
+		"CORS_ALLOWED_ORIGINS",
+		"http://localhost:5500,http://127.0.0.1:5500,http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173",
+	)
 
 	viper.SetDefault(
 		"OTEL_SERVICE_NAME",
@@ -232,6 +252,16 @@ func (c *Config) Validate() error {
 		return errors.New("LOG_LEVEL is required")
 	}
 
+	if c.KafkaCDCEnabled {
+		if err := c.validateKafka(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (c *Config) validateKafka() error {
 	if len(c.KafkaBrokers) == 0 {
 		return errors.New("KAFKA_BROKERS is required")
 	}

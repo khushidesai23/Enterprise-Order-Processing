@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { toast } from "sonner";
-import { Lock, MapPin, RotateCcw, ShieldCheck, Truck } from "lucide-react";
+import { ArrowRight, Plus, RotateCcw, ShieldCheck, Truck } from "lucide-react";
 import { productsApi } from "@/lib/endpoints";
 import { ApiError, errorMessage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -10,46 +11,137 @@ import { MAX_LINE_QUANTITY, useCart } from "@/lib/cart";
 import { rememberViewed } from "@/lib/saved";
 import type { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { EmptyState, ErrorState, Skeleton } from "@/components/ui/primitives";
-import { DealBadge, PriceTag, ProductImage, ProductRail, RatingLine, WishlistButton, deliveryDate, distinctProducts } from "@/components/shop";
+import { Stepper, useBag } from "@/store/bag";
+import { WishToggle } from "@/store/ProductTile";
+import { Rail } from "@/store/Rail";
+import { Eyebrow, Price, ProductShot, Skel, StarRow, StockMeter, Sticker, baseName, discountOf, distinct, ease, pill, variantLabel } from "@/store/ui";
 import { ReviewsSection } from "./ReviewsSection";
 
+function deliveryDate(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+}
+
+// Main image with crossfade between gallery images and a pointer zoom.
 function Gallery({ product }: { product: Product }) {
   const images = product.images.length > 0 ? product.images : product.image_url ? [product.image_url] : [];
   const [active, setActive] = useState(0);
+  const [zoom, setZoom] = useState<{ x: number; y: number } | null>(null);
+  const reduce = useReducedMotion();
+  const off = discountOf(product.price, product.mrp);
   const current = images[active] ?? product.image_url;
 
+  function onMove(event: MouseEvent<HTMLDivElement>) {
+    if (reduce) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    setZoom({ x: ((event.clientX - rect.left) / rect.width) * 100, y: ((event.clientY - rect.top) / rect.height) * 100 });
+  }
+
   return (
-    <div className="flex gap-3 lg:sticky lg:top-32">
+    <div className="lg:sticky lg:top-24">
+      <div
+        className="relative aspect-square cursor-zoom-in overflow-hidden rounded-[2.5rem] bg-bone-2"
+        onMouseMove={onMove}
+        onMouseLeave={() => setZoom(null)}
+      >
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={current}
+            className="absolute inset-0 p-10 sm:p-16"
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.02 }}
+            transition={{ duration: 0.45, ease }}
+          >
+            <div
+              className="size-full transition-transform duration-200 ease-out"
+              style={zoom ? { transform: "scale(1.8)", transformOrigin: `${zoom.x}% ${zoom.y}%` } : undefined}
+            >
+              <ProductShot id={product.id} name={product.name} src={current} size="lg" eager className="size-full" />
+            </div>
+          </motion.div>
+        </AnimatePresence>
+        {off >= 5 && <Sticker className="absolute left-6 top-6 size-20 text-base">-{off}%</Sticker>}
+        <WishToggle product={{ ...product, category: product.category?.name ?? "" }} className="absolute right-5 top-5 size-11" />
+        {images.length > 1 && (
+          <span className="absolute bottom-5 right-6 font-mono text-[11px] tracking-widest text-smoke">
+            {String(active + 1).padStart(2, "0")} / {String(images.length).padStart(2, "0")}
+          </span>
+        )}
+      </div>
       {images.length > 1 && (
-        <div className="flex flex-col gap-2" role="tablist" aria-label="Product images">
+        <div className="mt-3 flex gap-2" role="tablist" aria-label="Product images">
           {images.map((image, index) => (
             <button
               key={image}
               role="tab"
               aria-selected={index === active}
               aria-label={`Image ${index + 1}`}
-              onMouseEnter={() => setActive(index)}
               onClick={() => setActive(index)}
+              onMouseEnter={() => setActive(index)}
               className={cn(
-                "size-14 overflow-hidden rounded-md border-2 bg-white p-0.5",
-                index === active ? "border-amber-500 shadow" : "border-border hover:border-amber-300",
+                "size-20 overflow-hidden rounded-2xl bg-bone-2 p-2 ring-2 ring-offset-2 ring-offset-bone transition-all",
+                index === active ? "ring-ink" : "ring-transparent opacity-60 hover:opacity-100",
               )}
             >
-              <img src={image} alt="" className="h-full w-full object-contain" />
+              <img src={image} alt="" className="size-full object-contain" />
             </button>
           ))}
         </div>
       )}
-      <div className="relative flex-1">
-        <ProductImage id={product.id} name={product.name} src={current} size="lg" className="aspect-square rounded-lg" />
-        <WishlistButton
-          product={{ ...product, category: product.category?.name ?? "" }}
-          className="absolute right-3 top-3"
-        />
+    </div>
+  );
+}
+
+// Sibling listings share the base name: "Realme C35 (256 GB, Glacier Blue)".
+function Variants({ product }: { product: Product }) {
+  const base = baseName(product.name);
+  const siblings = useQuery({
+    queryKey: ["search", "variants", base, product.brand],
+    queryFn: () => productsApi.search({ q: base, brand: product.brand ? [product.brand] : undefined, sort: "price_asc", limit: 30 }),
+    staleTime: 60_000,
+  });
+  const options = (siblings.data?.items ?? []).filter((item) => baseName(item.name) === base);
+  if (options.length < 2) return null;
+
+  return (
+    <div>
+      <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.18em] text-smoke">Options · {options.length}</p>
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => {
+          const current = option.id === product.id;
+          const soldOut = option.available_quantity <= 0;
+          return (
+            <Link
+              key={option.id}
+              to={`/shop/products/${option.id}`}
+              replace
+              aria-current={current ? "true" : undefined}
+              className={cn(
+                "rounded-2xl border px-3.5 py-2 text-sm transition-colors",
+                current ? "border-ink bg-ink text-bone" : "border-ink/15 hover:border-ink",
+                soldOut && !current && "text-smoke line-through decoration-signal",
+              )}
+            >
+              {variantLabel(option.name)}
+            </Link>
+          );
+        })}
       </div>
     </div>
+  );
+}
+
+function Fold({ title, children, open = false }: { title: string; children: ReactNode; open?: boolean }) {
+  return (
+    <details open={open} className="group border-t border-ink/10 py-1 [&_summary::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between py-4 font-display text-lg font-bold tracking-tight">
+        {title}
+        <Plus className="size-5 transition-transform duration-300 group-open:rotate-45" />
+      </summary>
+      <div className="pb-6">{children}</div>
+    </details>
   );
 }
 
@@ -57,19 +149,23 @@ export function ProductPage() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { add, lines } = useCart();
+  const { lines } = useCart();
+  const bag = useBag();
+  const buyBox = useRef<HTMLDivElement>(null);
   const [quantity, setQuantity] = useState(1);
   const product = useQuery({ queryKey: ["product", id], queryFn: () => productsApi.get(id) });
+  const item = product.data;
+
   const related = useQuery({
-    queryKey: ["search", "related", product.data?.category.id],
-    queryFn: () => productsApi.search({ category_id: product.data!.category.id, sort: "bestselling", limit: 60 }),
-    enabled: !!product.data,
+    queryKey: ["search", "related", item?.category.id],
+    queryFn: () => productsApi.search({ category_id: item!.category.id, sort: "bestselling", limit: 60 }),
+    enabled: !!item,
     staleTime: 60_000,
   });
   const brandMore = useQuery({
-    queryKey: ["search", "brand", product.data?.brand],
-    queryFn: () => productsApi.search({ brand: [product.data!.brand], sort: "reviews", limit: 60 }),
-    enabled: !!product.data?.brand,
+    queryKey: ["search", "brand", item?.brand],
+    queryFn: () => productsApi.search({ brand: [item!.brand], sort: "reviews", limit: 60 }),
+    enabled: !!item?.brand,
     staleTime: 60_000,
   });
 
@@ -78,7 +174,6 @@ export function ProductPage() {
   }, [id]);
 
   useEffect(() => {
-    const item = product.data;
     if (item) {
       rememberViewed({
         id: item.id,
@@ -92,251 +187,188 @@ export function ProductPage() {
         category: item.category?.name ?? "",
       });
     }
-  }, [product.data]);
+  }, [item]);
 
   if (product.isLoading) {
     return (
-      <div className="mx-auto grid max-w-[1500px] gap-8 bg-surface px-4 py-8 lg:grid-cols-[1.1fr_1.2fr_300px]">
-        <Skeleton className="aspect-square" />
+      <div className="mx-auto grid max-w-[1600px] gap-10 px-5 py-8 sm:px-8 lg:grid-cols-[1.15fr_1fr]">
+        <Skel className="aspect-square rounded-[2.5rem]" />
         <div className="space-y-4">
-          <Skeleton className="h-8 w-3/4" />
-          <Skeleton className="h-5 w-40" />
-          <Skeleton className="h-32" />
+          <Skel className="h-4 w-40" />
+          <Skel className="h-24 w-full" />
+          <Skel className="h-10 w-48" />
+          <Skel className="h-40" />
         </div>
-        <Skeleton className="h-80" />
       </div>
     );
   }
 
-  if (product.isError || !product.data) {
+  if (product.isError || !item) {
     const notFound = product.error instanceof ApiError && (product.error.status === 404 || product.error.status === 400);
     return (
-      <div className="mx-auto max-w-3xl px-4 py-16">
-        {notFound ? (
-          <EmptyState
-            title="Product not found"
-            description="It may have been removed from the catalogue."
-            action={
-              <Link to="/shop">
-                <Button variant="secondary">Back to the store</Button>
-              </Link>
-            }
-          />
-        ) : (
-          <ErrorState message={errorMessage(product.error)} onRetry={() => product.refetch()} />
-        )}
+      <div className="mx-auto flex max-w-3xl flex-col items-start gap-4 px-5 py-24">
+        <p className="font-display text-6xl font-extrabold tracking-tight">{notFound ? "Not in the index." : "Something broke."}</p>
+        <p className="text-smoke">{notFound ? "This object may have been retired from the catalogue." : errorMessage(product.error)}</p>
+        <Link to="/shop/search" className={pill("ink")}>
+          Back to the index
+        </Link>
       </div>
     );
   }
 
-  const item = product.data;
   const available = item.inventory?.available_quantity ?? 0;
-  const inCart = lines.find((line) => line.productId === item.id)?.quantity ?? 0;
-  const maxAddable = Math.max(0, Math.min(available, MAX_LINE_QUANTITY) - inCart);
+  const inBag = lines.find((line) => line.productId === item.id)?.quantity ?? 0;
+  const maxAddable = Math.max(0, Math.min(available, MAX_LINE_QUANTITY) - inBag);
   const qty = Math.min(quantity, Math.max(1, maxAddable));
-  const highlights = item.specs.filter((spec) => !["Model number", "Delivery", "Returns", "Warranty"].includes(spec.name)).slice(0, 6);
-  const warranty = item.specs.find((spec) => spec.name === "Warranty")?.value;
-  const returns = item.specs.find((spec) => spec.name === "Returns")?.value;
+  const spec = (name: string) => item.specs.find((entry) => entry.name === name)?.value;
+  const sentences = (item.description || "No description has been added for this object yet.").split(/(?<=\.)\s+/).filter(Boolean);
 
-  function addToCart(buyNow: boolean) {
-    add(
-      {
-        productId: item.id,
-        name: item.name,
-        sku: item.sku,
-        price: item.price,
-        category: item.category?.name ?? "",
-        imageUrl: item.image_url,
-      },
+  function add(goToCheckout: boolean) {
+    bag.add(
+      { productId: item!.id, name: item!.name, sku: item!.sku, price: item!.price, category: item!.category?.name ?? "", imageUrl: item!.image_url },
       qty,
+      goToCheckout ? null : (document.querySelector("[data-gallery]") as HTMLElement | null),
     );
     setQuantity(1);
-    if (buyNow) navigate(user ? "/shop/checkout" : "/login", { state: { from: "/shop/checkout" } });
-    else toast.success(`Added ${qty} × ${item.name} to cart`);
+    if (goToCheckout) navigate(user ? "/shop/checkout" : "/login", { state: { from: "/shop/checkout" } });
+    else toast("Added to bag", { description: `${qty} × ${item!.name}` });
   }
 
   return (
-    <div className="bg-surface">
-      <nav className="mx-auto max-w-[1500px] px-4 pt-3 text-xs text-subtle" aria-label="Breadcrumb">
-        <Link to="/shop" className="hover:underline">Home</Link>
-        <span className="mx-1.5">›</span>
-        <Link to={`/shop/search?category_id=${item.category?.id}`} className="hover:underline">
-          {item.category?.name}
-        </Link>
+    <div className="mx-auto max-w-[1600px] px-5 sm:px-8">
+      <nav aria-label="Breadcrumb" className="py-4 font-mono text-[11px] uppercase tracking-[0.16em] text-smoke">
+        <Link to="/shop/search" className="hover:text-ink">Index</Link>
+        <span className="mx-2">/</span>
+        <Link to={`/shop/search?category_id=${item.category?.id}`} className="hover:text-ink">{item.category?.name}</Link>
         {item.brand && (
           <>
-            <span className="mx-1.5">›</span>
-            <Link to={`/shop/search?brand=${encodeURIComponent(item.brand)}`} className="hover:underline">
-              {item.brand}
-            </Link>
+            <span className="mx-2">/</span>
+            <Link to={`/shop/search?brand=${encodeURIComponent(item.brand)}`} className="hover:text-ink">{item.brand}</Link>
           </>
         )}
       </nav>
 
-      <div className="mx-auto grid max-w-[1500px] items-start gap-8 px-4 py-5 lg:grid-cols-[1.1fr_1.2fr_300px]">
-        <Gallery key={item.id} product={item} />
-
-        <div className="min-w-0">
-          <h1 className="text-2xl font-medium leading-snug">{item.name}</h1>
-          {item.brand && (
-            <Link to={`/shop/search?brand=${encodeURIComponent(item.brand)}`} className="mt-1 inline-block text-sm text-link hover:text-deal hover:underline">
-              Visit the {item.brand} Store
-            </Link>
-          )}
-          <div className="mt-1.5">
-            <RatingLine average={item.rating_average} count={item.rating_count} href="#reviews" />
-          </div>
-          <hr className="my-3" />
-          <DealBadge price={item.price} mrp={item.mrp} />
-          <div className="mt-2">
-            <PriceTag price={item.price} mrp={item.mrp} size="lg" />
-          </div>
-          <p className="text-sm">Inclusive of all taxes</p>
-
-          <div className="mt-4 grid grid-cols-3 gap-2 border-y border-border py-4 text-center text-xs text-link">
-            <div className="flex flex-col items-center gap-1">
-              <Truck className="size-6 text-subtle" /> Free Delivery
-            </div>
-            <div className="flex flex-col items-center gap-1">
-              <RotateCcw className="size-6 text-subtle" /> {returns ?? "Easy returns"}
-            </div>
-            <div className="flex flex-col items-center gap-1">
-              <ShieldCheck className="size-6 text-subtle" /> {warranty ?? "Secure transaction"}
-            </div>
-          </div>
-
-          {highlights.length > 0 && (
-            <table className="mt-4 text-sm">
-              <tbody>
-                {highlights.map((spec) => (
-                  <tr key={spec.name}>
-                    <th className="w-36 py-1 pr-4 text-left align-top font-semibold">{spec.name}</th>
-                    <td className="py-1">{spec.value}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-
-          <hr className="my-4" />
-          <h2 className="mb-2 text-base font-bold">About this item</h2>
-          <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed">
-            {(item.description || "No description has been added for this product yet.")
-              .split(/(?<=\.)\s+/)
-              .filter(Boolean)
-              .map((sentence, index) => (
-                <li key={index}>{sentence}</li>
-              ))}
-          </ul>
+      <div className="grid items-start gap-10 lg:grid-cols-[1.15fr_1fr] lg:gap-16">
+        <div data-gallery>
+          <Gallery key={item.id} product={item} />
         </div>
 
-        <aside className="rounded-lg border border-border p-4" aria-label="Buy box">
-          <PriceTag price={item.price} mrp={0} size="md" />
-          <p className="mt-2 text-sm">
-            <span className="text-link">FREE delivery</span>{" "}
-            <span className="font-semibold">{deliveryDate(item.price >= 499 ? 3 : 5)}</span>
-          </p>
-          <p className="mt-1 flex items-center gap-1 text-xs text-link">
-            <MapPin className="size-3.5" /> Deliver to {user ? user.first_name : "you"} – India
-          </p>
+        <motion.div ref={buyBox} initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease }} className="min-w-0">
+          <Eyebrow>
+            {item.brand || "meridian/"} · {item.category?.name} · {item.sku}
+          </Eyebrow>
+          <h1 className="mt-3 font-display text-[clamp(2.2rem,4.2vw,3.8rem)] font-extrabold leading-[0.95] tracking-[-0.045em]">{item.name}</h1>
+          <a href="#reviews" className="mt-4 inline-flex items-center gap-2 text-sm hover:underline">
+            <StarRow value={item.rating_average} />
+            <span className="font-mono text-xs text-smoke">
+              {item.rating_count > 0 ? `${item.rating_average.toFixed(1)} · ${item.rating_count} reviews` : "No reviews yet"}
+            </span>
+          </a>
 
-          <p className={cn("mt-3 text-lg font-medium", available > 0 ? "text-success" : "text-danger")}>
-            {available <= 0 ? "Currently unavailable" : available <= 10 ? `Only ${available} left in stock.` : "In stock"}
-          </p>
+          <div className="mt-8 flex flex-wrap items-end gap-4">
+            <Price price={item.price} mrp={item.mrp} size="lg" />
+          </div>
+          <p className="mt-1 text-sm text-smoke">Inclusive of all taxes</p>
 
-          {available > 0 && (
-            <>
-              <label className="mt-3 flex items-center gap-2 text-sm">
-                Quantity:
-                <select
-                  value={qty}
-                  onChange={(event) => setQuantity(Number(event.target.value))}
-                  disabled={maxAddable <= 0}
-                  className="cursor-pointer rounded-lg border border-border bg-muted px-2 py-1 shadow-sm"
-                  aria-label="Quantity"
-                >
-                  {Array.from({ length: Math.max(1, Math.min(maxAddable, 10)) }, (_, i) => i + 1).map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                onClick={() => addToCart(false)}
-                disabled={maxAddable <= 0}
-                className="mt-4 w-full rounded-full bg-cart py-2 text-sm font-medium hover:bg-cart-hover disabled:opacity-50"
-              >
-                Add to Cart
-              </button>
-              <button
-                onClick={() => addToCart(true)}
-                disabled={maxAddable <= 0}
-                className="mt-2 w-full rounded-full bg-buy py-2 text-sm font-medium hover:bg-buy-hover disabled:opacity-50"
-              >
-                Buy Now
-              </button>
-              {inCart > 0 && (
-                <p className="mt-2 text-xs text-subtle">
-                  {inCart} in your{" "}
-                  <Link to="/shop/cart" className="text-link hover:underline">
-                    cart
-                  </Link>
-                  {maxAddable <= 0 ? " — that's all the stock we have." : "."}
-                </p>
-              )}
-            </>
-          )}
+          <div className="mt-8 space-y-6">
+            <Variants product={item} />
+            <StockMeter available={available} />
 
-          <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-            <dt className="text-subtle">Ships from</dt>
-            <dd>Meridian Market</dd>
-            <dt className="text-subtle">Sold by</dt>
-            <dd>{item.brand || "Meridian Market"}</dd>
-            <dt className="text-subtle">Payment</dt>
-            <dd className="flex items-center gap-1">
-              <Lock className="size-3" /> Secure transaction
-            </dd>
-          </dl>
-        </aside>
-      </div>
+            {available > 0 ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <Stepper value={qty} max={Math.max(1, maxAddable)} onChange={setQuantity} label="Quantity" />
+                <button onClick={() => add(false)} disabled={maxAddable <= 0} className={cn(pill("acid", "lg"), "flex-1")}>
+                  Add to bag
+                </button>
+                <button onClick={() => add(true)} disabled={maxAddable <= 0} className={cn(pill("ink", "lg"), "flex-1")}>
+                  Buy now <ArrowRight className="size-5" />
+                </button>
+                {inBag > 0 && (
+                  <p className="w-full font-mono text-xs text-smoke">
+                    {inBag} already in your bag{maxAddable <= 0 ? " — that's all the stock there is." : "."}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="rounded-2xl bg-bone-2 p-4 text-sm">
+                This object is sold out. Save it to your wishlist and check back: stock is updated live.
+              </p>
+            )}
 
-      <div className="mx-auto max-w-[1500px] space-y-6 px-4 pb-8">
-        <ProductRail
-          title={`More in ${item.category?.name ?? "this department"}`}
-          products={distinctProducts(related.data?.items.filter((other) => other.image_url !== item.image_url), 18)}
-          loading={related.isLoading}
-        />
-        {item.brand && (
-          <ProductRail
-            title={`More from ${item.brand}`}
-            products={distinctProducts(brandMore.data?.items.filter((other) => other.image_url !== item.image_url), 18)}
-            loading={brandMore.isLoading}
-          />
-        )}
+            <dl className="grid gap-px overflow-hidden rounded-3xl bg-ink/10 sm:grid-cols-3">
+              {[
+                { icon: Truck, label: "Delivery", value: `${item.price >= 499 ? "Free" : "Standard"} · ${deliveryDate(item.price >= 499 ? 3 : 5)}` },
+                { icon: RotateCcw, label: "Returns", value: spec("Returns") ?? "Easy returns" },
+                { icon: ShieldCheck, label: "Warranty", value: spec("Warranty") ?? "Seller warranty" },
+              ].map(({ icon: Icon, label, value }) => (
+                <div key={label} className="bg-bone p-4">
+                  <Icon className="size-5" />
+                  <dt className="mt-3 font-mono text-[10px] uppercase tracking-[0.16em] text-smoke">{label}</dt>
+                  <dd className="mt-0.5 text-sm">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
 
-        {item.specs.length > 0 && (
-          <section className="rounded-lg border border-border">
-            <h2 className="border-b border-border px-5 py-3 text-lg font-bold">Product information</h2>
-            <table className="w-full text-sm">
-              <tbody>
-                {item.specs.map((spec) => (
-                  <tr key={spec.name} className="border-b border-border last:border-0">
-                    <th className="w-1/3 bg-muted/60 px-5 py-2 text-left font-semibold">{spec.name}</th>
-                    <td className="px-5 py-2">{spec.value}</td>
-                  </tr>
+          <div className="mt-10">
+            <Fold title="About this object" open>
+              <ul className="space-y-2 text-[15px] leading-relaxed">
+                {sentences.map((sentence, index) => (
+                  <li key={index} className="flex gap-3">
+                    <span className="mt-2.5 size-1.5 shrink-0 rounded-full bg-ultra" />
+                    {sentence}
+                  </li>
                 ))}
-                <tr>
-                  <th className="w-1/3 bg-muted/60 px-5 py-2 text-left font-semibold">SKU</th>
-                  <td className="px-5 py-2">{item.sku}</td>
-                </tr>
-              </tbody>
-            </table>
-          </section>
-        )}
-
-        <ReviewsSection product={item} />
+              </ul>
+            </Fold>
+            {item.specs.length > 0 && (
+              <Fold title="Specifications">
+                <table className="w-full text-sm">
+                  <tbody>
+                    {item.specs.map((entry) => (
+                      <tr key={entry.name} className="border-b border-ink/10 last:border-0">
+                        <th className="w-2/5 py-2.5 pr-4 text-left font-mono text-[11px] font-normal uppercase tracking-wider text-smoke">{entry.name}</th>
+                        <td className="py-2.5">{entry.value}</td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <th className="w-2/5 py-2.5 pr-4 text-left font-mono text-[11px] font-normal uppercase tracking-wider text-smoke">SKU</th>
+                      <td className="py-2.5 font-mono">{item.sku}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </Fold>
+            )}
+            <Fold title="Delivery & orders">
+              <p className="text-[15px] leading-relaxed text-smoke">
+                Stock is reserved the moment you place your order and held while you pay. Payment is verified with Razorpay before the order is
+                confirmed, and you can follow it from packed to delivered in your orders.
+              </p>
+            </Fold>
+          </div>
+        </motion.div>
       </div>
+
+      <Rail
+        eyebrow={`More in ${item.category?.name ?? "this department"}`}
+        title={
+          <>
+            Pairs <span className="font-serif font-normal italic text-ultra">well</span> with
+          </>
+        }
+        products={distinct(related.data?.items.filter((other) => other.image_url !== item.image_url), 14)}
+        loading={related.isLoading}
+      />
+      {item.brand && (
+        <Rail
+          eyebrow="Same maker"
+          title={<>More from {item.brand}</>}
+          products={distinct(brandMore.data?.items.filter((other) => other.image_url !== item.image_url), 14)}
+          loading={brandMore.isLoading}
+        />
+      )}
+
+      <ReviewsSection product={item} />
     </div>
   );
 }

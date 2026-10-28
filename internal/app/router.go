@@ -145,7 +145,7 @@ func NewRouter(options RouterOptions) (*gin.Engine, error) {
 	router.Use(middleware.Prometheus())
 	router.Use(middleware.RequestTimeout(requestTimeout))
 	router.Use(middleware.RequestLogger(options.Logger))
-	router.Use(middleware.CORS())
+	router.Use(middleware.CORS(options.Config.CORSAllowedOrigins))
 
 	routes.Register(
 		router,

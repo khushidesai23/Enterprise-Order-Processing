@@ -38,6 +38,24 @@
   --color-star: #f59e0b;
   --color-link: #2162a1;
 
+  /* meridian/ storefront identity */
+  --color-bone: #f2efe8;
+  --color-bone-2: #e7e2d7;
+  --color-bone-3: #d9d3c5;
+  --color-ink: #0c0c0d;
+  --color-ink-2: #19191b;
+  --color-ink-3: #2a2a2e;
+  --color-smoke: #66625a;
+  --color-acid: #d7ff3a;
+  --color-acid-2: #c4f000;
+  --color-ultra: #6a4dff;
+  --color-signal: #ff5a1f;
+
+  --font-display: "Syne", "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Instrument Serif", ui-serif, Georgia, serif;
+  --font-store: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
   --color-sidebar: #0f172a;
   --color-sidebar-foreground: #cbd5e1;
   --color-sidebar-active: #1e293b;
@@ -59,10 +77,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-*,
-::before,
-::after {
-  border-color: var(--color-border);
+/* Default border colour, in the base layer so border-* utilities win. */
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-border);
+  }
 }
 
 :focus-visible {
@@ -95,4 +116,99 @@ body {
 }
 .no-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+/* ---- meridian/ storefront ------------------------------------------- */
+
+/* In the base layer so utilities such as bg-ink still win on .store
+   elements (the footer, menu overlay and drawers). */
+@layer base {
+  .store {
+    font-family: var(--font-store);
+    background: var(--color-bone);
+    color: var(--color-ink);
+    font-feature-settings: "ss01", "cv11";
+  }
+
+  .store ::selection {
+    background: var(--color-acid);
+    color: var(--color-ink);
+  }
+
+  .store :focus-visible {
+    outline: 2px solid var(--color-ultra);
+    outline-offset: 3px;
+  }
+}
+
+/* Paper grain on bone surfaces. */
+.grain {
+  position: relative;
+  isolation: isolate;
+}
+.grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.35;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .08 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee-track {
+  animation: marquee var(--marquee-duration, 40s) linear infinite;
+}
+.marquee-track[data-reverse="true"] {
+  animation-direction: reverse;
+}
+.marquee:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+@keyframes orbit {
+  from { transform: rotateX(-18deg) rotateY(0deg); }
+  to { transform: rotateX(-18deg) rotateY(360deg); }
+}
+@keyframes counter-orbit {
+  from { transform: rotateY(0deg); }
+  to { transform: rotateY(-360deg); }
+}
+.orbit-ring {
+  transform-style: preserve-3d;
+  animation: orbit 46s linear infinite;
+}
+.orbit-face {
+  animation: counter-orbit 46s linear infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}
+.float {
+  animation: float 7s ease-in-out infinite;
+}
+
+@keyframes bump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+.bump {
+  animation: bump 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track,
+  .orbit-ring,
+  .orbit-face,
+  .float,
+  .bump {
+    animation: none !important;
+  }
 }

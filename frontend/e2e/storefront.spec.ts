@@ -3,33 +3,51 @@ import { ADMIN, backend, signIn, stubRazorpay, uniqueEmail } from "./helpers";
 
 test.afterAll(() => backend.cleanup());
 
+// The header search opens a command palette; submitting goes to the index.
 async function searchFor(page: Page, text: string) {
-  await page.getByRole("search").getByLabel("Search products").fill(text);
-  await page.getByRole("search").getByRole("button", { name: "Search" }).click();
+  await page.getByRole("button", { name: "Open search" }).click();
+  const palette = page.getByRole("dialog");
+  await palette.getByLabel("Search products").fill(text);
+  await palette.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page).toHaveURL(/\/shop\/search\?/);
 }
 
 async function checkoutFromProduct(page: Page, productId: string) {
   await page.goto(`/shop/products/${productId}`);
-  await page.getByRole("button", { name: "Buy Now" }).click();
+  await page.getByRole("button", { name: "Buy now" }).click();
   await expect(page).toHaveURL(/\/shop\/checkout$/);
   await page.getByRole("button", { name: /Place order & pay/ }).click();
 }
 
 test.describe("storefront", () => {
-  test("home page shows departments and product rails", async ({ page }) => {
+  test("home page shows live sections and the departments menu", async ({ page }) => {
     await page.goto("/");
     await expect(page).toHaveURL(/\/shop$/);
-    await expect(page.getByRole("heading", { name: "Today's Deals" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Best Sellers", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Objects for the next decade." })).toBeVisible();
+    await expect(page.getByText(/objects/).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Today's drops." })).toBeVisible();
     await expect(page.getByTestId("product-card").first()).toBeVisible();
-    await expect(page.getByRole("link", { name: /^See more in / }).first()).toBeVisible();
 
-    // The "All" drawer lists every department.
-    await page.getByRole("button", { name: "All", exact: true }).click();
-    await expect(page.getByRole("dialog").getByText("Shop by Department")).toBeVisible();
-    await page.getByRole("dialog").getByRole("link", { name: "Best Sellers" }).click();
+    // The departments menu lists live departments and navigates.
+    await page.getByRole("button", { name: "Departments" }).click();
+    const menu = page.getByRole("dialog");
+    await expect(menu.getByText("Departments", { exact: true })).toBeVisible();
+    await menu.getByRole("link", { name: "Most wanted" }).click();
     await expect(page).toHaveURL(/sort=bestselling/);
+    await expect(page.getByRole("heading", { name: /Most wanted/ })).toBeVisible();
+  });
+
+  test("search palette shows live results", async ({ page }) => {
+    const adminToken = await backend.login(ADMIN.email, ADMIN.password);
+    const product = await backend.createProduct(adminToken, 9, 999);
+
+    await page.goto("/shop");
+    await page.keyboard.press("Control+k");
+    const palette = page.getByRole("dialog");
+    await palette.getByLabel("Search products").fill(product.sku);
+    await expect(palette.getByText("1 matches")).toBeVisible();
+    await palette.getByRole("button", { name: new RegExp(product.name) }).click();
+    await expect(page).toHaveURL(new RegExp(`/shop/products/${product.id}$`));
   });
 
   test("search with department, brand, price and rating filters and sorting", async ({ page }) => {
@@ -49,8 +67,7 @@ test.describe("storefront", () => {
     await expect(page).toHaveURL(/category_id=/);
     await expect(page.getByTestId("result-summary")).toContainText("in E2E Fixtures");
 
-    // Brand facet.
-    // The checkbox follows the URL, which updates just after the click.
+    // Brand facet. The checkbox follows the URL, which updates just after the click.
     await page.getByRole("checkbox", { name: /E2E Brand/ }).click();
     await expect(page.getByRole("checkbox", { name: /E2E Brand/ })).toBeChecked();
     await expect(page).toHaveURL(/brand=E2E\+Brand/);
@@ -78,8 +95,8 @@ test.describe("storefront", () => {
     // Product page.
     await page.goto(`/shop/products/${cheap.id}`);
     await expect(page.getByRole("heading", { name: cheap.name })).toBeVisible();
-    await expect(page.getByText("-20%")).toBeVisible();
-    await expect(page.getByText("Visit the E2E Brand Store")).toBeVisible();
+    await expect(page.getByText("-20%").first()).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("E2E Brand");
     await expect(page.getByText("In stock", { exact: true })).toBeVisible();
   });
 
@@ -129,24 +146,24 @@ test.describe("storefront", () => {
     await expect(page).toHaveURL(/\/shop$/);
     await expect(page.getByRole("button", { name: "Account menu" })).toContainText("Asha");
 
-    // Add 2 from the product page, then make it 3 in the cart.
+    // Add 2 from the product page, then make it 3 in the bag.
     await page.goto(`/shop/products/${product.id}`);
-    await page.getByLabel("Quantity").selectOption("2");
-    await page.getByRole("button", { name: "Add to Cart" }).click();
+    await page.getByRole("button", { name: "Increase quantity", exact: true }).click();
+    await page.getByRole("button", { name: "Add to bag" }).click();
     await expect(page.getByTestId("cart-count")).toHaveText("2");
     await page.goto("/shop/cart");
     await expect(page.getByTestId("cart-line")).toHaveCount(1);
-    await page.getByLabel(`Quantity of ${product.name}`).selectOption("3");
+    await page.getByRole("button", { name: /Increase quantity of/i }).click();
     await expect(page.getByTestId("cart-count")).toHaveText("3");
     await expect(page.getByText("₹2,250.00").first()).toBeVisible();
 
-    await page.getByRole("button", { name: "Proceed to Buy" }).click();
+    await page.getByRole("button", { name: "Checkout" }).click();
     await expect(page).toHaveURL(/\/shop\/checkout$/);
     await page.getByRole("button", { name: /Place order & pay/ }).click();
 
     // POST /orders -> POST /payments (real Razorpay test order) -> verify.
     await expect(page).toHaveURL(/\/shop\/orders\/[0-9a-f-]{36}$/, { timeout: 30_000 });
-    await expect(page.getByText("Thank you! Your order is confirmed.")).toBeVisible();
+    await expect(page.getByText("Thank you! Your order is confirmed.", { exact: false })).toBeVisible();
     await expect(page.getByText("Captured")).toBeVisible();
     await expect(page.getByTestId("cart-count")).toHaveText("0");
 
@@ -180,7 +197,7 @@ test.describe("storefront", () => {
     await expect(page.getByRole("button", { name: "Account menu" })).toContainText("Ashwini");
   });
 
-  test("wishlist: save, move to cart and save for later", async ({ page }) => {
+  test("bag drawer, wishlist and save for later", async ({ page }) => {
     const adminToken = await backend.login(ADMIN.email, ADMIN.password);
     const product = await backend.createProduct(adminToken, 5, 300);
 
@@ -190,11 +207,17 @@ test.describe("storefront", () => {
 
     await page.goto("/shop/wishlist");
     await expect(page.getByTestId("wishlist-item")).toContainText(product.name);
-    await page.getByRole("button", { name: "Move to cart" }).click();
+    await page.getByRole("button", { name: "Move to bag" }).click();
     await expect(page.getByTestId("wishlist-item")).toHaveCount(0);
     await expect(page.getByTestId("cart-count")).toHaveText("1");
 
-    await page.goto("/shop/cart");
+    // The bag drawer shows the line with live price and stepper.
+    await page.getByRole("button", { name: /^Bag, 1 items/ }).click();
+    const drawer = page.getByRole("dialog");
+    await expect(drawer.getByText(product.name)).toBeVisible();
+    await drawer.getByRole("link", { name: "View bag" }).click();
+    await expect(page).toHaveURL(/\/shop\/cart$/);
+
     await page.getByRole("button", { name: "Save for later" }).click();
     await expect(page.getByTestId("cart-line")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Saved for later" })).toBeVisible();
@@ -238,20 +261,20 @@ test.describe("storefront", () => {
     await expect(page.getByText("Captured")).toBeVisible();
   });
 
-  test("cart blocks checkout when it asks for more than is in stock", async ({ page }) => {
+  test("bag blocks checkout when it asks for more than is in stock", async ({ page }) => {
     const adminToken = await backend.login(ADMIN.email, ADMIN.password);
     const product = await backend.createProduct(adminToken, 1, 100);
 
     await page.goto(`/shop/products/${product.id}`);
-    await page.getByRole("button", { name: "Add to Cart" }).click();
-    await expect(page.getByRole("button", { name: "Add to Cart" })).toBeDisabled();
+    await page.getByRole("button", { name: "Add to bag" }).click();
+    await expect(page.getByRole("button", { name: "Add to bag" })).toBeDisabled();
 
     // Someone else buys the last unit.
     const other = await backend.registerCustomer();
     await backend.placePaidOrder(other.token, product.id, 1);
 
     await page.goto("/shop/cart");
-    await expect(page.getByText("Out of stock")).toBeVisible();
+    await expect(page.getByText("Sold out", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: /check out/i })).toBeDisabled();
   });
 });

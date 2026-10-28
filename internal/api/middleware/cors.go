@@ -7,18 +7,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func CORS() gin.HandlerFunc {
+// CORS allows the given browser origins to call the API. With none, every
+// cross-origin request is refused (cors.New rejects an empty list).
+func CORS(allowedOrigins []string) gin.HandlerFunc {
+
+	var allowNone func(string) bool
+	if len(allowedOrigins) == 0 {
+		allowNone = func(string) bool { return false }
+	}
 
 	return cors.New(cors.Config{
-		AllowOrigins: []string{
-			"http://localhost:5500",
-			"http://127.0.0.1:5500",
-			// frontend/ (Vite dev server and preview)
-			"http://localhost:5173",
-			"http://127.0.0.1:5173",
-			"http://localhost:4173",
-			"http://127.0.0.1:4173",
-		},
+		AllowOrigins:    allowedOrigins,
+		AllowOriginFunc: allowNone,
 
 		AllowMethods: []string{
 			"GET",
