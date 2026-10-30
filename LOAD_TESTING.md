@@ -359,7 +359,10 @@ Not changed, with reasons:
   drawing capacity conclusions.
 - Stage boundaries in the shapes are time-based; compare server-side windows
   (Prometheus) rather than Locust's cumulative percentiles for recovery.
-- No authorization model (see README *Known limitations*); load tests use one
-  user for all virtual users.
+- Load tests use one customer account for all virtual users (plus an admin
+  for seeding), so per-user contention is not modelled.
+- Failure and recovery behaviour under load (crashes, outages, overload) is
+  covered separately in
+  [documentation/FAILURE_RECOVERY_DRILLS.pdf](documentation/FAILURE_RECOVERY_DRILLS.pdf).
 - No Debezium JMX or PostgreSQL exporter metrics; CDC consumer has no
   business processing.
